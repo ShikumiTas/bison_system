@@ -19,15 +19,15 @@ const form = useForm({
 
 const breadcrumbs: BreadcrumbItem[] = [
     {
-        title: '企業一覧',
-        // href: dashboard().url,
+        title: '経審・企業一覧',
+        href: '/biz/index',
     },
 ];
 
 </script>
 
 <template>
-    <Head title="企業一覧" />
+    <Head title="経審・企業一覧" />
     <AppLayout :breadcrumbs="breadcrumbs">
     </AppLayout>
 

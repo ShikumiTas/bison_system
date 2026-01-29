@@ -16,7 +16,7 @@ class BizController extends Controller
 
         // list($post, ) = $case($post);
 
-        return Inertia::render('Biz/list', [
+        return Inertia::render('Biz/index', [
         ]);
     }
 

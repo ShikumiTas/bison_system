@@ -13,10 +13,12 @@ class ProjectController extends Controller
     public function index(Request $request, IndexAction $case)
     {
         $post = $request->all();
+        
+        list($projects, ) = $case($post);
 
-        // list($post, ) = $case($post);
+        return Inertia::render('Project/index', [
+            'projects' => $projects,
 
-        return Inertia::render('Project/list', [
         ]);
     }
 

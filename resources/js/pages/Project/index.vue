@@ -8,7 +8,7 @@ import { Head, useForm, } from "@inertiajs/vue3";
 import { ref, } from "vue";
 
 const props = defineProps({
-  post:           Object,
+  projects:           Object,
 });
 
 // submit 処理
@@ -22,7 +22,7 @@ const form = useForm({
 const breadcrumbs: BreadcrumbItem[] = [
     {
         title: '案件一覧',
-        href: route('project.list'),
+        href: '/project/index',
     },
 ];
 
@@ -31,6 +31,7 @@ const breadcrumbs: BreadcrumbItem[] = [
 <template>
     <Head title="案件一覧" />
     <AppLayout :breadcrumbs="breadcrumbs">
+        {{ projects }}
     </AppLayout>
 
 </template>

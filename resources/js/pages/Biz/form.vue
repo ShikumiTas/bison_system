@@ -13,7 +13,7 @@ const form = useForm({});
 const breadcrumbs: BreadcrumbItem[] = [
     {
         title: '経審・企業情報',
-        // href: dashboard().url,
+        href: '/biz/edit',
     },
 ];
 

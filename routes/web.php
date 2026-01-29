@@ -6,6 +6,7 @@ use Laravel\Fortify\Features;
 
 use App\Http\Controllers\BizController;
 use App\Http\Controllers\ProjectController;
+use App\Http\Controllers\ImportController;
 
 Route::get('/', function () {
     return Inertia::render('Welcome', [
@@ -19,20 +20,21 @@ Route::get('dashboard', function () {
 
 Route::middleware('auth')->group(function () {
 
+    Route::get('/import', [ImportController::class, 'index'])->name('import.index');
+    Route::post('/import', [ImportController::class, 'store'])->name('import.store');
+    
     // 案件管理
     Route::prefix('project')->name('project.')->group(function () {
-        // 登録
         // 案件一覧表示
-        Route::get('/list', [ProjectController::class, 'index'])->name('index');
+        Route::get('/index', [ProjectController::class, 'index'])->name('index');
         // 案件情報表示
         Route::get('/edit/{id}', [ProjectController::class, 'edit'])->name('edit');
     });
 
     // 経審・企業管理
     Route::prefix('biz')->name('biz.')->group(function () {
-        // 登録
         // 企業情報一覧表示
-        Route::get('/list', [BizController::class, 'index'])->name('index');
+        Route::get('/index', [BizController::class, 'index'])->name('index');
         // 企業情報表示
         Route::get('/edit/{id}', [BizController::class, 'edit'])->name('edit');
 
