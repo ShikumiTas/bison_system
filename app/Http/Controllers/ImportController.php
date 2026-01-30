@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 
 class ImportController extends Controller
@@ -28,8 +29,9 @@ class ImportController extends Controller
         
         // storage_path('app/' . $path) が一般的ですが、Laravel11等の最新構成なら
         // storage_path('app/private/' . $path) になる場合があるため確認が必要です
-        $fullPath = storage_path('app/' . $path);
-
+        // $fullPath = storage_path('app/' . $path);
+        // 2. 「ストレージの仕組み」にフルパスを計算させる（これが確実！）
+            $fullPath = Storage::path($path);
         // 2. コマンドの選択
         $command = $request->type === 'projects' ? 'import:projects' : 'import:bizs';
 

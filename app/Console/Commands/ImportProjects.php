@@ -14,48 +14,86 @@ class ImportProjects extends Command
     public function handle()
     {
         $path = $this->argument('path');
+        \Log::info("CSVインポート開始: {$path}");
 
-    dd($path);
-        if (!file_exists($path)) {
-            $this->error("File not found: {$path}");
-            return;
-        }
+        if (!file_exists($path)) return;
 
-        $file = fopen($path, 'r');
-        $header = fgetcsv($file); // 1行目（ヘッダー）を飛ばす
+        // 文字コード対策をしてストリームを開く
+        $content = file_get_contents($path);
+        $content = mb_convert_encoding($content, 'UTF-8', 'ASCII,JIS,UTF-8,CP932,SJIS-win');
+        $file = fopen('php://temp', 'r+');
+        fwrite($file, $content);
+        rewind($file);
 
+        fgetcsv($file); // ヘッダーをスキップ
+
+        $chunkSize = 1000;
         $data = [];
         $count = 0;
 
         while (($row = fgetcsv($file)) !== FALSE) {
-            // CSVのカラムとDBの値をマッピング（例）
-            $data[] = [
-                'project_code' => $row[0], // A列
-                'name'         => $row[1], // B列
-                'status'       => $row[2], // C列
-                'updated_at'   => now(),
-                'created_at'   => now(),
-            ];
+            if (empty(array_filter($row))) continue;
 
-            // 1000件ごとに一括保存（メモリ節約 & 高速化）
-            if (count($data) >= 1000) {
-                $this->upsertData($data);
+            // DBのカラム名 => CSVのインデックス
+            // ImportProjects.php の handle内マッピング部分
+
+            $data[] = [
+                'project_external_id' => $row[1],  // 案件ID
+                'title'               => $row[3],  // 案件名
+                'bidding_type'        => $row[2],  // 入札形式
+                'url'                 => $row[4],  // 案件概要URL
+                'organization'        => $row[5],  // 機関名
+                'bid_date'            => $this->formatDate($row[9]), // 入札日
+                
+                // 【重要】もし今後カラムを追加するならここが住所
+                // 'organization_address' => $row[6], // 機関所在地
+                // 'winner_address'       => $row[20], // 落札会社住所
+                
+                'winning_price'       => is_numeric($row[22]) ? (int)$row[22] : null,
+                'winner_name'         => ($row[19] && str_contains($row[19], '有料プラン')) ? null : $row[19],
+                
+                'updated_at'          => now(),
+                'created_at'          => now(),
+            ];
+            if (count($data) >= $chunkSize) {
+                $this->performUpsert($data);
                 $data = [];
             }
             $count++;
         }
 
-        // 残りのデータを保存
         if (!empty($data)) {
-            $this->upsertData($data);
+            $this->performUpsert($data);
         }
 
         fclose($file);
-        
-        // 処理が終わったらファイルを消す（ストレージ節約）
         unlink($path);
 
-        $this->info("Successfully imported {$count} projects.");
+        \Log::info("インポート完了: 合計 {$count} 件");
+    }
+
+    /**
+     * データベースへ一括保存 (重複時は更新)
+     */
+    private function performUpsert(array $data)
+    {
+        \App\Models\Project::upsert(
+            $data, 
+            ['project_external_id'], // 重複判定に使うユニークキー
+            ['title', 'bidding_type', 'url', 'organization', 'bid_date', 'winning_price', 'winner_name', 'updated_at'] // 更新するカラム
+        );
+    }
+    /**
+     * 日付形式を yyyy-mm-dd に整える
+     */
+    private function formatDate($dateStr)
+    {
+        if (!$dateStr || $dateStr === '-') return null;
+        try {
+            return \Carbon\Carbon::parse($dateStr)->format('Y-m-d');
+        } catch (\Exception $e) {
+            return null;
+        }
     }
 
     private function upsertData(array $data)
