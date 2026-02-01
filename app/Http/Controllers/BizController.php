@@ -14,18 +14,146 @@ class BizController extends Controller
     {
         $post = $request->all();
 
-        // list($post, ) = $case($post);
+        list($bizs, ) = $case($post);
 
         return Inertia::render('Biz/index', [
+            'bizs' => $bizs,
         ]);
     }
 
-    public function edit(Request $request, FormAction $case)
+    public function edit(Request $request, FormAction $case, $id = 0)
     {
-
-        // list($demand, $quote_headers, $data, $remarks_to_gm, $remarks_to_bp) = $case($demand_id, $customer_id);
+        // UseCaseを実行して、企業・評価スコア・参画案件をまとめて取得
+        // ※ $id=0 の場合は新規作成用の空モデルを返す想定
+        $biz = $case($id);
 
         return Inertia::render('Biz/form', [
+            'biz' => $biz,
+            // 必要に応じて、プルダウン用のマスタデータなどを追加
         ]);
+    }
+
+    // public function search(Request $request)
+    // {
+    //     // 1. 基本情報の選択
+    //     $query = \App\Models\Biz::query()->select('bizs.*');
+
+    //     // 2. キーワード検索（企業名 or 許可番号）
+    //     if ($request->filled('keyword')) {
+    //         $keyword = $request->query('keyword');
+    //         $query->where(function($q) use ($keyword) {
+    //             $q->where('company_name', 'like', "%{$keyword}%")
+    //             ->orWhere('permit_id', 'like', "%{$keyword}%");
+    //         });
+    //     }
+
+    //     // 3. 場所の検索（都道府県・市区町村）
+    //     if ($request->filled('location')) {
+    //         $query->where('address', 'like', "%{$request->location}%");
+    //     }
+
+    //     // 4. 業種および詳細フィルタ（P点・売上）
+    //     // 業種が未指定でもデフォルトで「土木一式」などを対象にする運用がスムーズです
+    //     $category = $request->get('category', '土木一式');
+
+    //     // 表示用データの取得（target_p_score, target_sales）
+    //     $query->addSelect([
+    //         'target_p_score' => \App\Models\BizScore::select('p_score')
+    //             ->whereColumn('biz_id', 'bizs.id')
+    //             ->where('work_category', $category)
+    //             ->limit(1),
+    //         'target_sales' => \App\Models\BizScore::select('avg_sales')
+    //             ->whereColumn('biz_id', 'bizs.id')
+    //             ->where('work_category', $category)
+    //             ->limit(1)
+    //     ]);
+
+    //     // リレーション先の詳細条件で絞り込み
+    //     $query->whereHas('scores', function ($q) use ($category, $request) {
+    //         $q->where('work_category', $category);
+
+    //         // P点（以上）フィルタ
+    //         if ($request->filled('min_score')) {
+    //             $q->where('p_score', '>=', $request->min_score);
+    //         }
+
+    //         // 売上（以上）フィルタ
+    //         if ($request->filled('min_sales')) {
+    //             $q->where('avg_sales', '>=', (int)$request->min_sales * 10000);
+    //         }
+
+    //         // 売上（以下）フィルタ ★追加
+    //         if ($request->filled('max_sales')) {
+    //             $q->where('avg_sales', '<=', (int)$request->max_sales * 10000);
+    //         }
+    //     });
+
+    //     // 5. ソート：売上の降順を優先
+    //     $query->orderBy('target_sales', 'desc')
+    //         ->orderBy('target_p_score', 'desc')
+    //         ->orderBy('id', 'asc');
+
+    //     $bizs = $query->limit(20)->get();
+
+    //     return response()->json($bizs);
+    // }
+    public function search(Request $request)
+    {
+        // 1. 基本セレクト
+        $query = \App\Models\Biz::query()->select('bizs.*');
+
+        // 2. 場所（東京都など）
+        if ($request->filled('location')) {
+            $query->where('address', 'like', "%{$request->location}%");
+        }
+
+        // 3. キーワード（企業名）
+        if ($request->filled('keyword')) {
+            $keyword = $request->keyword;
+            $query->where(function($q) use ($keyword) {
+                $q->where('company_name', 'like', "%{$keyword}%")
+                ->orWhere('permit_id', 'like', "%{$keyword}%");
+            });
+        }
+
+        // 4. 業種と数値詳細（ここがフィルタの核心）
+        $category = $request->get('category', '土木一式');
+
+        // 表示用サブクエリ
+        $query->addSelect([
+            'target_p_score' => \App\Models\BizScore::select('p_score')
+                ->whereColumn('biz_id', 'bizs.id')
+                ->where('work_category', $category)
+                ->latest()->limit(1),
+            'target_sales' => \App\Models\BizScore::select('avg_sales')
+                ->whereColumn('biz_id', 'bizs.id')
+                ->where('work_category', $category)
+                ->latest()->limit(1)
+        ]);
+
+        // ★ フィルタを適用：指定した業種で「かつ」数値条件を満たすレコードがあるか
+        $query->whereHas('scores', function ($q) use ($category, $request) {
+            $q->where('work_category', $category);
+
+            // P点フィルタ
+            if ($request->filled('min_score')) {
+                $q->where('p_score', '>=', (int)$request->min_score);
+            }
+
+            // 売上（以上）
+            if ($request->filled('min_sales')) {
+                $q->where('avg_sales', '>=', (int)$request->min_sales * 10000);
+            }
+
+            // 売上（以下）
+            if ($request->filled('max_sales')) {
+                $q->where('avg_sales', '<=', (int)$request->max_sales * 10000);
+            }
+        });
+
+        // 5. ソート
+        $query->orderBy('target_sales', 'desc');
+
+        return response()->json($query->limit(20)->get());
     }
 }

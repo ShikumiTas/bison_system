@@ -22,6 +22,12 @@ Route::middleware('auth')->group(function () {
 
     Route::get('/import', [ImportController::class, 'index'])->name('import.index');
     Route::post('/import', [ImportController::class, 'store'])->name('import.store');
+    Route::get('/api/biz/search', [BizController::class, 'search'])->name('api.biz.search');
+    Route::post('/project/{project_id}/matching', [ProjectController::class, 'matching'])
+        ->name('project.matching');
+    // マッチング解除（中間テーブルの削除）
+    Route::delete('/project/{project_id}/matching/{biz_id}', [ProjectController::class, 'unmatching'])
+        ->name('project.unmatching');
     
     // 案件管理
     Route::prefix('project')->name('project.')->group(function () {
@@ -39,6 +45,8 @@ Route::middleware('auth')->group(function () {
         Route::get('/edit/{id}', [BizController::class, 'edit'])->name('edit');
 
     });
+
+    
 });
 
 require __DIR__.'/settings.php';

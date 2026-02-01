@@ -102,10 +102,6 @@ const mainNavItems: NavItem[] = [
                 title: '案件一覧',
                 href: '/project/index',
             },
-            {
-                title: '案件詳細',
-                href: '/project/edit/0',
-            },
         ],
     },
     {
@@ -116,10 +112,6 @@ const mainNavItems: NavItem[] = [
             {
                 title: '経審・企業一覧',
                 href: '/biz/index',
-            },
-            {
-                title: '経審・企業詳細',
-                href: '/biz/edit/0',
             },
         ],
     },
@@ -137,8 +129,8 @@ const mainNavItems: NavItem[] = [
 ];
 const footerNavItems: NavItem[] = [
     {
-        title: 'Github Repo',
-        href: 'https://github.com/laravel/vue-starter-kit',
+        title: 'NJSS入札情報速報サービス',
+        href: 'https://www2.njss.info/',
         icon: Folder,
     },
     {

@@ -7,6 +7,8 @@ use Inertia\Inertia;
 
 use App\UseCases\Project\IndexAction;
 use App\UseCases\Project\FormAction;
+use App\UseCases\Project\MatchingAction;
+use App\UseCases\Project\UnmatchingAction;
 
 class ProjectController extends Controller
 {
@@ -22,13 +24,27 @@ class ProjectController extends Controller
         ]);
     }
 
-    public function edit(Request $request, FormAction $case)
+    public function edit(Request $request, FormAction $case, $id = 0)
     {
-
-        // list($demand, $quote_headers, $data, $remarks_to_gm, $remarks_to_bp) = $case($demand_id, $customer_id);
+        // UseCase内でリレーションがロードされた $project を取得
+        list($project, $relatedBizs) = $case($id);
 
         return Inertia::render('Project/form', [
+            'project'     => $project,
+            'relatedBizs' => $relatedBizs, // Eloquentが取得した紐付け企業リスト
         ]);
     }
+    
+    public function matching(Request $request, $project_id, MatchingAction $case)
+    {
+        $case($project_id, $request->all());
 
+        return redirect()->back();
+    }
+
+    public function unmatching($project_id, $biz_id, UnmatchingAction $case)
+    {
+        $case($project_id, $biz_id);
+        return redirect()->back();
+    }
 }
