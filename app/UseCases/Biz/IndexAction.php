@@ -53,7 +53,7 @@ class IndexAction
               ->orderBy('projects_count', 'desc')
               ->orderBy('id', 'desc');
 
-        $perPage = $post['show_list_cnt'] ?? 20;
+        $perPage = $post['show_list_cnt'] ?? 5;
         $bizs = $query->paginate($perPage)->withQueryString();
 
         // フロントエンドの v-for="p in biz.ongoing_projects" で 

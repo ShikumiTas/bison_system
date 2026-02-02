@@ -2,14 +2,23 @@
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
 import { Head, useForm, Link } from "@inertiajs/vue3";
-import { Search, Plus, Building2, ArrowRight, Globe, Users, Phone, MapPin, Briefcase, ChevronRight } from 'lucide-vue-next';
+import { 
+    Search, Plus, Building2, ArrowRight, Globe, Users, 
+    Phone, MapPin, Briefcase, ChevronRight, ChevronLeft, MoreHorizontal 
+} from 'lucide-vue-next';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 
 const props = defineProps({
     bizs: {
         type: Object,
-        default: () => ({ data: [] })
+        default: () => ({ 
+            data: [],
+            links: [], 
+            total: 0,
+            from: 0,
+            to: 0
+        })
     },
     filters: {
         type: Object,
@@ -27,13 +36,20 @@ const form = useForm({
 });
 
 function submit() {
-    form.get('/biz/index', { preserveState: true });
+    form.get('/biz/index', { preserveState: true, preserveScroll: true });
 }
 
 function setStatus(status: 'active' | 'all') {
     form.status = status;
     submit();
 }
+
+// Laravelのラベル文字列をクリーンアップしてアイコンとテキストに変換するヘルパー
+const getLinkLabel = (label: string) => {
+    if (label.includes('Previous')) return 'prev';
+    if (label.includes('Next')) return 'next';
+    return label;
+};
 </script>
 
 <template>
@@ -68,9 +84,9 @@ function setStatus(status: 'active' | 'all') {
                         </Button>
                     </div>
                 </div>
-                <Button as-child variant="outline" class="h-10 border-dashed border-primary text-primary hover:bg-primary/5">
+                <!-- <Button as-child variant="outline" class="h-10 border-dashed border-primary text-primary hover:bg-primary/5">
                     <Link href="/biz/edit/0"><Plus class="w-4 h-4 mr-2" /> 新規登録</Link>
-                </Button>
+                </Button> -->
             </div>
 
             <div class="rounded-lg border bg-card shadow-sm overflow-hidden">
@@ -86,7 +102,7 @@ function setStatus(status: 'active' | 'all') {
                         <tr v-for="biz in bizs?.data" :key="biz.id" class="hover:bg-muted/5 transition-colors">
                             <td class="p-4 align-top">
                                 <div class="flex items-start gap-3">
-                                    <div class="p-2 bg-slate-100 rounded-lg text-slate-600 mt-1">
+                                    <div class="p-2 bg-slate-100 rounded-lg text-slate-600 mt-1 shrink-0">
                                         <Building2 class="w-4 h-4" />
                                     </div>
                                     <div class="min-w-0">
@@ -107,7 +123,7 @@ function setStatus(status: 'active' | 'all') {
                                 <div class="flex flex-col gap-3">
                                     <div v-if="biz.ongoing_projects?.length" class="grid grid-cols-1 gap-1.5">
                                         <div v-for="p in biz.ongoing_projects" :key="p.id" 
-                                            class="group relative flex items-center justify-between bg-blue-50/50 hover:bg-blue-50 border border-blue-100 rounded-md px-3 py-1.5 transition-all">
+                                            class="flex items-center justify-between bg-blue-50/50 border border-blue-100 rounded-md px-3 py-1.5">
                                             <div class="flex items-center gap-2 overflow-hidden">
                                                 <div class="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse shrink-0"></div>
                                                 <span class="text-[11px] font-bold text-blue-900 truncate">{{ p.name }}</span>
@@ -116,28 +132,26 @@ function setStatus(status: 'active' | 'all') {
                                         </div>
                                     </div>
 
-                                    <div class="flex items-center gap-4">
-                                        <div class="flex items-center gap-3">
+                                    <div class="flex items-center gap-4 tabular-nums">
+                                        <div class="flex items-center gap-3 font-black">
                                             <div v-if="biz.ongoing_count > 0" class="flex flex-col">
                                                 <span class="text-[9px] text-muted-foreground font-bold uppercase">施工中</span>
-                                                <span class="text-sm font-black text-blue-600 leading-none">{{ biz.ongoing_count }}<span class="text-[10px] ml-0.5">件</span></span>
+                                                <span class="text-sm text-blue-600 leading-none">{{ biz.ongoing_count }}<span class="text-[10px] ml-0.5 font-normal">件</span></span>
                                             </div>
                                             <div v-if="biz.received_count > 0" class="flex flex-col border-l pl-3">
                                                 <span class="text-[9px] text-muted-foreground font-bold uppercase">見積済</span>
-                                                <span class="text-sm font-black text-emerald-600 leading-none">{{ biz.received_count }}<span class="text-[10px] ml-0.5">件</span></span>
+                                                <span class="text-sm text-emerald-600 leading-none">{{ biz.received_count }}<span class="text-[10px] ml-0.5 font-normal">件</span></span>
                                             </div>
                                             <div v-if="biz.requesting_count > 0" class="flex flex-col border-l pl-3">
                                                 <span class="text-[9px] text-muted-foreground font-bold uppercase">見積中</span>
-                                                <span class="text-sm font-black text-amber-600 leading-none">{{ biz.requesting_count }}<span class="text-[10px] ml-0.5">件</span></span>
+                                                <span class="text-sm text-amber-600 leading-none">{{ biz.requesting_count }}<span class="text-[10px] ml-0.5 font-normal">件</span></span>
                                             </div>
                                         </div>
-                                        
                                         <div class="ml-auto flex items-center gap-1.5 bg-slate-50 px-2 py-1 rounded border border-slate-100">
                                             <Briefcase class="w-3 h-3 text-slate-400" />
                                             <span class="text-[10px] font-bold text-slate-500">累計 {{ biz.projects_count }}</span>
                                         </div>
                                     </div>
-
                                     <div v-if="!biz.projects_count" class="text-slate-400 text-[11px] italic flex items-center gap-1">
                                         <span class="w-1 h-1 bg-slate-300 rounded-full"></span> 案件履歴なし
                                     </div>
@@ -147,8 +161,7 @@ function setStatus(status: 'active' | 'all') {
                             <td class="p-4 text-right align-top">
                                 <Button variant="ghost" size="sm" as-child class="group hover:bg-primary hover:text-white transition-all">
                                     <Link :href="`/biz/edit/${biz.id}`">
-                                        詳細
-                                        <ChevronRight class="w-4 h-4 ml-1 opacity-50 group-hover:opacity-100" />
+                                        詳細 <ChevronRight class="w-4 h-4 ml-1 opacity-50 group-hover:opacity-100" />
                                     </Link>
                                 </Button>
                             </td>
@@ -157,39 +170,85 @@ function setStatus(status: 'active' | 'all') {
                 </table>
 
                 <div class="md:hidden divide-y">
-                    <div v-for="biz in bizs?.data" :key="biz.id" class="p-4 active:bg-slate-50">
-                        <Link :href="`/biz/edit/${biz.id}`" class="block">
-                            <div class="flex justify-between items-start mb-2">
+                    <div v-for="biz in bizs?.data" :key="biz.id" class="p-4 active:bg-slate-50 transition-colors">
+                        <Link :href="`/biz/edit/${biz.id}`" class="block space-y-3">
+                            <div class="flex justify-between items-start">
                                 <div class="font-bold text-base text-slate-900">{{ biz.company_name }}</div>
-                                <div class="bg-blue-50 text-blue-700 text-[10px] font-bold px-2 py-0.5 rounded border border-blue-100">
-                                    施工: {{ biz.ongoing_count }}
-                                </div>
-                            </div>
-                            
-                            <div class="space-y-2 mb-4">
-                                <div v-for="p in biz.ongoing_projects" :key="p.id" class="text-[11px] font-bold text-blue-800 bg-blue-50/30 px-2 py-1 border-l-2 border-blue-500 flex justify-between">
-                                    {{ p.name }}
-                                    <span class="text-[8px] opacity-50">NOW</span>
+                                <div class="flex gap-1">
+                                    <div v-if="biz.ongoing_count > 0" class="bg-blue-100 text-blue-700 text-[9px] font-black px-1.5 py-0.5 rounded border border-blue-200">
+                                        施工:{{ biz.ongoing_count }}
+                                    </div>
+                                    <div class="bg-slate-100 text-slate-600 text-[9px] font-bold px-1.5 py-0.5 rounded border border-slate-200">
+                                        累計:{{ biz.projects_count }}
+                                    </div>
                                 </div>
                             </div>
 
-                            <div class="flex items-center justify-between text-[11px]">
-                                <div class="flex items-center gap-3 text-muted-foreground">
-                                    <span class="flex items-center gap-1"><Phone class="w-3 h-3" /> {{ biz.phone_number || '-' }}</span>
-                                    <span class="font-bold">累計: {{ biz.projects_count }}件</span>
-                                </div>
-                                <div class="text-primary font-bold flex items-center gap-1">
-                                    DETAIL <ArrowRight class="w-3 h-3" />
+                            <div v-if="biz.ongoing_projects?.length" class="bg-blue-50/50 border border-blue-100 rounded px-2 py-1.5 flex items-center gap-2">
+                                <div class="w-1 h-1 rounded-full bg-blue-500 shrink-0"></div>
+                                <span class="text-[10px] font-bold text-blue-900 truncate flex-1">{{ biz.ongoing_projects[0].name }}</span>
+                                <span v-if="biz.ongoing_projects.length > 1" class="text-[9px] text-blue-400 font-normal">他{{ biz.ongoing_projects.length - 1 }}件</span>
+                            </div>
+                            
+                            <div class="flex items-center justify-between text-[11px] text-muted-foreground">
+                                <span class="flex items-center gap-1"><Phone class="w-3 h-3" /> {{ biz.phone_number || '-' }}</span>
+                                <div class="text-primary font-bold flex items-center gap-1 tracking-tight">
+                                    詳細を確認 <ArrowRight class="w-3 h-3" />
                                 </div>
                             </div>
                         </Link>
                     </div>
                 </div>
 
-                <div v-if="!bizs?.data?.length" class="p-16 text-center">
-                    <Search class="w-10 h-10 mx-auto text-muted-foreground/30 mb-4" />
-                    <p class="text-sm font-bold text-muted-foreground">該当する企業が見つかりませんでした。</p>
+            <div v-if="bizs?.links?.length > 3" class="px-4 py-4 border-t bg-muted/5 flex flex-col md:flex-row items-center justify-between gap-4">
+                <div class="text-xs md:text-sm text-muted-foreground tabular-nums">
+                    全 <span class="font-bold text-foreground">{{ bizs.total }}</span> 件中 
+                    <span class="font-bold text-foreground">{{ bizs.from }}</span> 〜 
+                    <span class="font-bold text-foreground">{{ bizs.to }}</span> 件
                 </div>
+                
+                <nav role="navigation" aria-label="pagination" class="flex items-center gap-1">
+                    <template v-for="(link, key) in bizs.links" :key="key">
+                        <Button 
+                            v-if="getLinkLabel(link.label) === 'prev'"
+                            variant="ghost" size="sm" as-child class="h-8 md:h-9 px-2"
+                            :class="!link.url && 'pointer-events-none opacity-30'"
+                        >
+                            <Link :href="link.url || '#'" preserve-scroll>
+                                <ChevronLeft class="h-4 w-4" />
+                            </Link>
+                        </Button>
+
+                        <Button 
+                            v-else-if="getLinkLabel(link.label) === 'next'"
+                            variant="ghost" size="sm" as-child class="h-8 md:h-9 px-2"
+                            :class="!link.url && 'pointer-events-none opacity-30'"
+                        >
+                            <Link :href="link.url || '#'" preserve-scroll>
+                                <ChevronRight class="h-4 w-4" />
+                            </Link>
+                        </Button>
+
+                        <Button 
+                            v-else-if="link.label !== '...'"
+                            :variant="link.active ? 'outline' : 'ghost'" 
+                            size="sm" as-child
+                            class="h-8 w-8 md:h-9 md:w-9 p-0 text-xs md:text-sm"
+                            :class="[
+                                link.active ? 'bg-background shadow-sm border-input font-bold' : 'hover:bg-muted',
+                                // モバイルで特定の番号以外を非表示にする（Inertiaの標準的なリンク数に対応）
+                                !link.active && !['1', String(bizs.last_page)].includes(link.label) ? 'hidden md:flex' : 'flex'
+                            ]"
+                        >
+                            <Link :href="link.url || '#'" preserve-scroll>{{ link.label }}</Link>
+                        </Button>
+
+                        <span v-else class="hidden md:flex h-9 w-9 items-center justify-center">
+                            <MoreHorizontal class="h-4 w-4 text-muted-foreground" />
+                        </span>
+                    </template>
+                </nav>
+            </div>
             </div>
         </div>
     </AppLayout>

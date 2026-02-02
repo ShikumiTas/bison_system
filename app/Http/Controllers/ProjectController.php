@@ -7,6 +7,7 @@ use Inertia\Inertia;
 
 use App\UseCases\Project\IndexAction;
 use App\UseCases\Project\FormAction;
+use App\UseCases\Project\UpdateAction;
 use App\UseCases\Project\MatchingAction;
 use App\UseCases\Project\UnmatchingAction;
 
@@ -35,9 +36,31 @@ class ProjectController extends Controller
         ]);
     }
     
-    public function matching(Request $request, $project_id, MatchingAction $case)
+    public function update(Request $request, $id, UpdateAction $case)
     {
-        $case($project_id, $request->all());
+        // バリデーション
+        $data = $request->validate([
+            'expected_amount' => 'nullable|numeric',
+            'status_memo'     => 'nullable|string',
+        ]);
+
+        // UseCaseの実行
+        $case($id, $data);
+
+        // 詳細画面へ戻る（Inertiaが最新の props を再送します）
+        return redirect()->back();
+    }
+
+    public function matching(Request $request, $project_id, MatchingAction $case, $biz_id = null)
+    {
+        // フロントから送られてきたデータに biz_id をマージする
+        // $biz_id がURLパラメータにある場合はそれを使用し、なければ $request から取る
+        $data = $request->all();
+        if ($biz_id) {
+            $data['biz_id'] = $biz_id;
+        }
+
+        $case($project_id, $data);
 
         return redirect()->back();
     }

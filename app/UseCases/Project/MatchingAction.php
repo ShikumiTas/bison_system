@@ -1,21 +1,34 @@
 <?php
+
 namespace App\UseCases\Project;
 
 use App\Models\Project;
+use Illuminate\Support\Facades\DB;
 
 class MatchingAction
 {
-    public function __invoke($project_id, array $data)
-    {
-        $project = Project::findOrFail($project_id);
+    /**
+     * 案件と企業の紐付け、およびステータス・メモの更新
+     */
 
-        // syncWithoutDetaching を使うと、既存の紐付けを壊さずに
-        // 新しい企業を追加（またはピボットデータの更新）ができます
-        $project->matchedBizs()->syncWithoutDetaching([
-            $data['biz_id'] => [
-                'role'   => $data['role'] ?? '協力会社',
-                'status' => 'requesting',
-            ]
+    public function __invoke(int $projectId, array $data)
+    {
+        $project = Project::findOrFail($projectId);
+        $bizId = $data['biz_id'];
+        
+        // 中間テーブル 'matches' のカラムに合わせてセット
+        $attributes = [];
+        if (isset($data['status'])) {
+            $attributes['status'] = $data['status'];
+        }
+
+        if (array_key_exists('memo', $data)) {
+                $attributes['memo'] = $data['memo'];
+        }
+
+        // リレーション名を matchedBizs() に変更
+        return $project->matchedBizs()->syncWithoutDetaching([
+            $bizId => $attributes
         ]);
     }
 }

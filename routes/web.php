@@ -23,10 +23,17 @@ Route::middleware('auth')->group(function () {
     Route::get('/import', [ImportController::class, 'index'])->name('import.index');
     Route::post('/import', [ImportController::class, 'store'])->name('import.store');
     Route::get('/api/biz/search', [BizController::class, 'search'])->name('api.biz.search');
-    Route::post('/project/{project_id}/matching', [ProjectController::class, 'matching'])
+
+    Route::patch('/project/{id}', [ProjectController::class, 'update'])->name('project.update');
+
+    // 新規紐付け（検索から追加）
+    Route::post('/project/{project}/matching', [ProjectController::class, 'matching'])
         ->name('project.matching');
-    // マッチング解除（中間テーブルの削除）
-    Route::delete('/project/{project_id}/matching/{biz_id}', [ProjectController::class, 'unmatching'])
+    // 更新（ステータスやメモの保存）
+    Route::patch('/project/{project}/matching/{biz}', [ProjectController::class, 'matching'])
+        ->name('project.matching.update');
+    // 紐付け解除
+    Route::delete('/project/{project}/matching/{biz}', [ProjectController::class, 'unmatching'])
         ->name('project.unmatching');
     
     // 案件管理

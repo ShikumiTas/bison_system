@@ -1,13 +1,16 @@
 <script setup lang="ts">
+import { ref } from 'vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import BizSearchInput from '@/pages/Biz/Partials/BizSearchInput.vue';
-import { Head, Link, router } from "@inertiajs/vue3";
+import { Head, Link, router, useForm } from "@inertiajs/vue3";
 import { 
     Building2, MoreVertical, Clock, ExternalLink, 
-    Calendar, MapPin, Truck, Globe, Edit, ShieldCheck, Tag
+    Calendar, MapPin, Truck, Globe, ShieldCheck, 
+    CheckCircle2, StickyNote, Phone, Edit3, Save, X, DollarSign
 } from 'lucide-vue-next';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
 import { 
     DropdownMenu, 
     DropdownMenuContent, 
@@ -20,15 +23,56 @@ const props = defineProps({
     relatedBizs: Array,
 });
 
-// ISO形式を yyyy/mm/dd に整形（時刻部分はカット）
+const isEditing = ref(false);
+
+const form = useForm({
+    expected_amount: props.project.expected_amount || '',
+    status: props.project.status || 0, // 案件自体のステータス
+    status_memo: props.project.status_memo || '',
+});
+
+const saveProject = () => {
+    form.patch(`/project/${props.project.id}`, {
+        preserveScroll: true,
+        onSuccess: () => {
+            isEditing.value = false;
+        },
+    });
+};
+
+// ステータスのラベルと色の定義（表示用）
+const getStatusLabel = (status: number) => {
+    const labels: Record<number, { text: string; class: string }> = {
+        0: { text: '検討中', class: 'bg-slate-500/10 text-slate-600 border-slate-200' },
+        1: { text: '調査・準備', class: 'bg-blue-500/10 text-blue-600 border-blue-200' },
+        2: { text: '応札済', class: 'bg-indigo-500/10 text-indigo-600 border-indigo-200' },
+        3: { text: '落札', class: 'bg-emerald-500/10 text-emerald-600 border-emerald-200' },
+        4: { text: '辞退・失注', class: 'bg-rose-500/10 text-rose-600 border-rose-200' },
+        5: { text: '完了', class: 'bg-amber-500/10 text-amber-600 border-amber-200' },
+    };
+    return labels[status] || { text: '不明', class: '' };
+};
+
 const formatDate = (dateStr: string | null) => {
     if (!dateStr) return '未設定';
     return dateStr.split('T')[0].replaceAll('-', '/');
 };
 
+const formatCurrency = (value: any) => {
+    if (!value) return '---';
+    return new Intl.NumberFormat('ja-JP', { style: 'currency', currency: 'JPY' }).format(value);
+};
+
+const updateMatching = (bizId: number, data: object) => {
+    router.patch(`/project/${props.project.id}/matching/${bizId}`, data, {
+        preserveScroll: true,
+        onSuccess: () => console.log('更新完了'),
+        onError: () => alert('更新に失敗しました。')
+    });
+};
+
 const removeBiz = (bizId: number) => {
     if (!confirm('この企業の紐付けを解除しますか？')) return;
-    
     router.delete(`/project/${props.project.id}/matching/${bizId}`, {
         preserveScroll: true,
     });
@@ -43,16 +87,23 @@ const breadcrumbs = [
 <template>
     <Head :title="`案件詳細 - ${project.title}`" />
     <AppLayout :breadcrumbs="breadcrumbs">
-        <div class="flex flex-col lg:flex-row h-[calc(100vh-64px)] overflow-hidden bg-background">
+        <div class="flex flex-col lg:flex-row lg:h-[calc(100vh-64px)] overflow-hidden bg-background text-left">
             
-            <aside class="w-full lg:w-[380px] border-r bg-card p-6 overflow-y-auto shadow-sm transition-colors">
+            <aside class="w-full lg:w-[380px] border-r border-border bg-card p-4 md:p-6 overflow-y-auto shadow-sm relative">
+                <div class="absolute top-4 right-4 z-10">
+                    <Button variant="ghost" size="sm" @click="isEditing = !isEditing" class="h-8 w-8 p-0 rounded-full">
+                        <X v-if="isEditing" class="w-4 h-4 text-muted-foreground" />
+                        <Edit3 v-else class="w-4 h-4 text-muted-foreground" />
+                    </Button>
+                </div>
+
                 <div class="mb-6">
-                    <div class="flex flex-wrap gap-2 mb-2">
-                        <Badge variant="outline" class="border-primary/20 text-primary font-mono text-[10px]">
+                    <div class="flex flex-wrap gap-2 mb-3">
+                        <Badge variant="outline" class="border-primary/20 text-primary font-mono text-[10px] bg-primary/5">
                             ID: #{{ project.project_external_id || project.id }}
                         </Badge>
-                        <Badge v-if="project.bidding_type" variant="secondary" class="text-[10px]">
-                            {{ project.bidding_type }}
+                        <Badge variant="outline" :class="[getStatusLabel(project.status).class, 'text-[10px] font-bold']">
+                            {{ getStatusLabel(project.status).text }}
                         </Badge>
                     </div>
                     <h1 class="text-xl font-black tracking-tight text-foreground leading-tight">
@@ -61,10 +112,59 @@ const breadcrumbs = [
                 </div>
 
                 <div class="space-y-6">
+                    <div v-if="isEditing" class="p-4 rounded-xl bg-primary/5 border border-primary/20 space-y-4 animate-in fade-in zoom-in-95 duration-200">
+                        <div>
+                            <label class="text-[10px] font-bold uppercase text-primary block mb-1">案件ステータス</label>
+                            <select 
+                                v-model="form.status"
+                                class="w-full text-xs border border-input bg-background rounded-md px-2 py-1.5 font-bold cursor-pointer focus:ring-2 ring-primary/20 outline-none"
+                            >
+                                <option :value="0">検討中</option>
+                                <option :value="1">調査・準備中</option>
+                                <option :value="2">応札済み</option>
+                                <option :value="3">落札（成功）</option>
+                                <option :value="4">辞退・失注</option>
+                                <option :value="5">完了</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="text-[10px] font-bold uppercase text-primary block mb-1">想定金額</label>
+                            <div class="relative">
+                                <DollarSign class="absolute left-2 top-2 w-3.5 h-3.5 text-muted-foreground" />
+                                <Input type="number" v-model="form.expected_amount" class="h-8 pl-7 text-xs font-bold" />
+                            </div>
+                        </div>
+                        <div>
+                            <label class="text-[10px] font-bold uppercase text-primary block mb-1">状況メモ</label>
+                            <div class="relative group/memo">
+                                <textarea 
+                                    v-model="form.status_memo" 
+                                    placeholder="現在の進捗など..."
+                                    class="w-full text-[11px] bg-background text-foreground border border-input rounded-md px-2 py-1.5 h-9 resize-none focus:h-32 transition-all duration-300 focus:ring-2 ring-primary/20 outline-none"
+                                ></textarea>
+                                <StickyNote class="absolute right-2 top-2 w-3 h-3 text-muted-foreground opacity-30 group-focus-within/memo:opacity-0" />
+                            </div>
+                        </div>
+                        <Button @click="saveProject" size="sm" class="w-full h-8 font-bold text-[11px]" :disabled="form.processing">
+                            <Save class="w-3.5 h-3.5 mr-1" /> 更新内容を保存
+                        </Button>
+                    </div>
+
+                    <template v-else>
+                        <div class="p-3 rounded-lg bg-blue-500/5 border border-blue-500/10">
+                            <label class="text-[10px] font-bold uppercase tracking-widest text-blue-600 block mb-1">想定金額</label>
+                            <p class="text-lg font-black text-foreground">{{ formatCurrency(project.expected_amount) }}</p>
+                        </div>
+                        <div v-if="project.status_memo" class="p-3 rounded-lg bg-amber-500/5 border border-amber-500/10">
+                            <label class="text-[10px] font-bold uppercase tracking-widest text-amber-600 block mb-1">状況メモ</label>
+                            <p class="text-[11px] text-muted-foreground whitespace-pre-wrap leading-relaxed">{{ project.status_memo }}</p>
+                        </div>
+                    </template>
+
                     <div>
                         <label class="text-[10px] font-bold uppercase tracking-widest text-muted-foreground block mb-2">発注機関 / 所在地</label>
                         <div class="space-y-2 pl-1">
-                            <p class="font-bold text-foreground/90 flex items-center gap-2 text-sm">
+                            <p class="font-bold text-foreground flex items-center gap-2 text-sm">
                                 <Building2 class="w-4 h-4 text-primary/60" /> {{ project.organization || '不明' }}
                             </p>
                             <p class="text-xs text-muted-foreground flex items-start gap-2 leading-relaxed">
@@ -73,124 +173,130 @@ const breadcrumbs = [
                         </div>
                     </div>
 
-                    <div class="p-3.5 rounded-xl bg-emerald-500/5 border border-emerald-500/10">
+                    <div class="p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
                         <label class="text-[10px] font-bold uppercase tracking-widest text-emerald-600 block mb-1.5">履行/納品場所</label>
-                        <p class="text-xs font-bold text-emerald-900 dark:text-emerald-300 flex items-start gap-2">
+                        <p class="text-xs font-bold text-foreground flex items-start gap-2">
                             <Truck class="w-4 h-4 shrink-0 text-emerald-500" /> {{ project.delivery_location || '仕様書による' }}
                         </p>
                     </div>
 
                     <div class="grid grid-cols-2 gap-3">
-                        <div class="p-3 rounded-lg bg-blue-500/5 border border-blue-500/10">
-                            <label class="text-[10px] font-bold uppercase tracking-widest text-blue-600 block mb-1">公示日</label>
-                            <p class="text-xs font-bold text-blue-800 dark:text-blue-300 flex items-center gap-2">
-                                <Calendar class="w-3.5 h-3.5 opacity-60" /> {{ formatDate(project.notice_date) }}
+                        <div class="p-3 rounded-lg bg-muted border border-border text-left">
+                            <label class="text-[10px] font-bold uppercase tracking-widest text-muted-foreground block mb-1 text-left">公示日</label>
+                            <p class="text-xs font-bold text-foreground flex items-center gap-2 truncate">
+                                <Calendar class="w-3.5 h-3.5 text-primary/60" /> {{ formatDate(project.notice_date) }}
                             </p>
                         </div>
-                        <div class="p-3 rounded-lg bg-orange-500/5 border border-orange-500/10">
-                            <label class="text-[10px] font-bold uppercase tracking-widest text-orange-600 block mb-1">入札日</label>
-                            <p class="text-xs font-bold text-orange-800 dark:text-orange-300 flex items-center gap-2">
-                                <Clock class="w-3.5 h-3.5 opacity-60" /> {{ formatDate(project.bid_date) }}
+                        <div class="p-3 rounded-lg bg-muted border border-border text-left">
+                            <label class="text-[10px] font-bold uppercase tracking-widest text-muted-foreground block mb-1 text-left">入札日</label>
+                            <p class="text-xs font-bold text-foreground flex items-center gap-2 truncate">
+                                <Clock class="w-3.5 h-3.5 text-orange-500/60" /> {{ formatDate(project.bid_date) }}
                             </p>
                         </div>
                     </div>
 
                     <div v-if="project.url" class="pt-2">
-                        <Button variant="outline" as-child class="w-full justify-between text-[11px] h-9 text-primary border-primary/10 hover:bg-primary/5">
+                        <Button variant="outline" as-child class="w-full justify-between text-[11px] h-9 border-primary/20 hover:bg-primary/5 transition-colors">
                             <a :href="project.url" target="_blank" rel="noopener noreferrer" class="flex items-center gap-2">
-                                <Globe class="w-4 h-4" /> 案件詳細（外部） <ExternalLink class="w-3 h-3 opacity-40" />
+                                <Globe class="w-4 h-4 text-primary" /> 案件詳細（外部） <ExternalLink class="w-3 h-3 opacity-40" />
                             </a>
                         </Button>
                     </div>
 
-                    <div class="pt-4 border-t border-dashed border-border/60 space-y-4">
-                        <div>
-                            <label class="text-[10px] font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-2 mb-1">
-                                <ShieldCheck class="w-3.5 h-3.5 text-slate-400" /> 入札資格
-                            </label>
-                            <p class="text-xs font-bold text-foreground pl-5.5">
-                                {{ project.bidding_qualifications || '未設定' }}
-                            </p>
-                        </div>
-                        <div>
-                            <label class="text-[10px] font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-2 mb-1">
-                                <Tag class="w-3.5 h-3.5 text-slate-400" /> 業種カテゴリ
-                            </label>
-                            <p class="text-xs font-bold text-foreground pl-5.5">
-                                {{ project.industry || '未設定' }}
-                            </p>
-                        </div>
+                    <div class="pt-4 border-t border-dashed border-border text-left">
+                        <label class="text-[10px] font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-2 mb-1">
+                            <ShieldCheck class="w-3.5 h-3.5 opacity-50" /> 入札資格
+                        </label>
+                        <p class="text-xs font-bold text-foreground pl-5.5 leading-relaxed">{{ project.bidding_qualifications || '未設定' }}</p>
                     </div>
-
                 </div>
             </aside>
 
-            <main class="flex-1 overflow-y-auto p-4 md:p-8 bg-slate-50/30 dark:bg-slate-950/20">
+            <main class="flex-1 overflow-y-auto p-4 md:p-8 bg-background/50">
                 <div class="max-w-4xl mx-auto">
-                    <div class="flex items-center justify-between mb-6">
-                        <h2 class="text-lg font-bold flex items-center gap-2 text-foreground">
-                            <Building2 class="w-5 h-5 text-primary" />
-                            協力会社・関連企業
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+                        <h2 class="text-lg font-black flex items-center gap-2 text-foreground">
+                            <CheckCircle2 class="w-5 h-5 text-primary" /> 検討・参画中の企業
                         </h2>
-                        <BizSearchInput 
-                            :projectId="project.id" 
-                            :relatedBizs="relatedBizs"
-                            :projectAddress="project.organization_address" 
-                        />
+                        <BizSearchInput :projectId="project.id" :relatedBizs="relatedBizs" :projectAddress="project.organization_address" />
                     </div>
 
                     <div class="grid gap-4">
                         <div v-for="biz in relatedBizs" :key="biz.id" 
-                            class="group bg-card text-card-foreground rounded-xl border border-border p-4 shadow-sm hover:shadow-md transition-all border-l-4"
-                            :class="biz.status === 'completed' ? 'border-l-emerald-500' : 'border-l-orange-400'">
+                            class="group bg-card text-card-foreground rounded-xl border border-border p-4 md:p-5 shadow-sm hover:shadow-md transition-all border-l-4 text-left"
+                            :class="{
+                                'border-l-blue-500': biz.status === 'ongoing',
+                                'border-l-emerald-500': biz.status === 'completed',
+                                'border-l-amber-400': biz.status === 'requesting' || biz.status === 'received',
+                                'border-l-muted': !biz.status
+                            }">
                             
-                            <div class="flex items-start justify-between">
-                                <div class="flex-1">
-                                    <div class="flex items-center gap-2 mb-1">
-                                        <h3 class="font-bold text-foreground">
-                                            <a :href="`/biz/edit/${biz.id}`" target="_blank" rel="noopener noreferrer" class="font-bold text-foreground hover:text-primary hover:underline transition-colors underline-offset-4 decoration-primary/30 flex items-center gap-1 group/link">
+                            <div class="flex items-start justify-between gap-2 md:gap-4">
+                                <div class="flex-1 min-w-0">
+                                    <div class="flex flex-wrap items-center gap-2 mb-2">
+                                        <h3 class="text-sm md:text-base font-bold text-foreground flex items-center gap-1 group/link">
+                                            <a :href="`/biz/edit/${biz.id}`" target="_blank" class="hover:text-primary hover:underline underline-offset-4 truncate max-w-[200px] md:max-w-none">
                                                 {{ biz.company_name }}
-                                                <ExternalLink class="w-3 h-3 opacity-0 group-hover/link:opacity-100 transition-opacity" />
                                             </a>
+                                            <ExternalLink class="w-3.5 h-3.5 opacity-30 group-hover/link:opacity-100" />
                                         </h3>
-                                        <span class="text-[10px] bg-secondary text-secondary-foreground px-1.5 py-0.5 rounded font-mono font-bold">
-                                            P:{{ biz.p_score }}
-                                        </span>
+                                        <div class="flex gap-1">
+                                            <Badge variant="outline" class="bg-muted/50 text-[10px] font-black h-5">P:{{ biz.score_p || '-' }}</Badge>
+                                            <Badge v-if="biz.rank" class="bg-foreground text-background text-[9px] h-5 italic font-black px-1.5">{{ biz.rank }}</Badge>
+                                        </div>
                                     </div>
-                                    <p class="text-xs text-muted-foreground mb-3 font-medium">担当役割: {{ biz.role || '未設定' }}</p>
-                                    
-                                    <div class="flex items-center gap-4">
-                                        <select class="text-xs border-none bg-secondary text-secondary-foreground rounded px-2 py-1 focus:ring-1 ring-primary cursor-pointer font-bold">
-                                            <option>見積依頼中</option>
-                                            <option selected>契約済み</option>
-                                            <option>施工完了</option>
-                                        </select>
-                                        <div class="flex items-center gap-1 text-[11px] text-muted-foreground">
-                                            <Clock class="w-3 h-3" />
-                                            最終更新: 2時間前
+
+                                    <div class="flex flex-col md:flex-row md:flex-wrap gap-x-4 gap-y-1 mb-4 text-[11px] text-muted-foreground">
+                                        <div class="flex items-center gap-1"><MapPin class="w-3 h-3 shrink-0" /> <span class="truncate">{{ biz.address || '住所未登録' }}</span></div>
+                                        <div class="text-primary font-bold flex items-center gap-1"><Phone class="w-3 h-3 shrink-0" /> {{ biz.phone_number || '番号未登録' }}</div>
+                                    </div>
+
+                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3 bg-muted/50 p-3 rounded-lg border border-border/50">
+                                        <div>
+                                            <label class="text-[9px] font-bold text-muted-foreground uppercase mb-1.5 block">参画ステータス</label>
+                                            <select 
+                                                @change="updateMatching(biz.id, { status: ($event.target as HTMLSelectElement).value })"
+                                                class="w-full text-xs border border-input bg-background rounded-md px-2 py-1.5 font-bold cursor-pointer focus:ring-2 ring-primary/20 outline-none"
+                                            >
+                                                <option value="requesting" :selected="biz.status === 'requesting'">見積依頼中</option>
+                                                <option value="received" :selected="biz.status === 'received'">見積受領</option>
+                                                <option value="ongoing" :selected="biz.status === 'ongoing'">施工・関与中</option>
+                                                <option value="completed" :selected="biz.status === 'completed'">施工完了</option>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label class="text-[9px] font-bold text-muted-foreground uppercase mb-1.5 block">社内メモ</label>
+                                            <div class="relative group/memo">
+                                                <textarea 
+                                                    @blur="updateMatching(biz.id, { memo: ($event.target as HTMLTextAreaElement).value })"
+                                                    class="w-full text-[11px] bg-background border border-input rounded-md px-2 py-1.5 h-9 resize-none focus:h-24 transition-all duration-300 focus:ring-2 ring-primary/20 outline-none"
+                                                    placeholder="交渉状況など..."
+                                                >{{ biz.memo }}</textarea>
+                                                <StickyNote class="absolute right-2 top-2 w-3 h-3 text-muted-foreground opacity-30 group-focus-within/memo:opacity-0" />
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
                                 
-                                <DropdownMenu>
-                                    <DropdownMenuTrigger as-child>
-                                        <Button variant="ghost" size="icon" class="opacity-0 group-hover:opacity-100 transition-opacity hover:bg-accent">
-                                            <MoreVertical class="w-4 h-4 text-muted-foreground" />
-                                        </Button>
-                                    </DropdownMenuTrigger>
-                                    <DropdownMenuContent align="end" class="w-40">
-                                        <DropdownMenuItem @click="removeBiz(biz.id)" class="text-destructive focus:text-destructive cursor-pointer">
-                                            紐付けを解除
-                                        </DropdownMenuItem>
-                                    </DropdownMenuContent>
-                                </DropdownMenu>
+                                <div class="flex flex-col items-end gap-2 shrink-0">
+                                    <DropdownMenu>
+                                        <DropdownMenuTrigger as-child>
+                                            <Button variant="ghost" size="icon" class="h-8 w-8"><MoreVertical class="w-4 h-4 text-muted-foreground" /></Button>
+                                        </DropdownMenuTrigger>
+                                        <DropdownMenuContent align="end">
+                                            <DropdownMenuItem @click="removeBiz(biz.id)" class="text-destructive font-bold">紐付けを解除</DropdownMenuItem>
+                                        </DropdownMenuContent>
+                                    </DropdownMenu>
+                                    <div class="text-[9px] text-muted-foreground font-medium flex items-center gap-1 mt-auto whitespace-nowrap">
+                                        <Clock class="w-3 h-3" /> {{ biz.updated_at_human || '更新履歴なし' }}
+                                    </div>
+                                </div>
                             </div>
                         </div>
-                        <div v-if="relatedBizs.length === 0" class="border-2 border-dashed border-border rounded-xl p-12 text-center text-muted-foreground bg-card/50">
-                            <div class="inline-flex p-3 rounded-full bg-secondary mb-4">
-                                <Building2 class="w-6 h-6 opacity-20" />
-                            </div>
-                            <p class="text-sm font-medium">まだ企業が紐付けられていません。</p>
+
+                        <div v-if="relatedBizs.length === 0" class="border-2 border-dashed border-border rounded-xl p-10 md:p-16 text-center text-muted-foreground bg-card/30">
+                            <Building2 class="w-8 h-8 opacity-20 text-foreground mx-auto mb-4" />
+                            <h3 class="text-base font-bold text-foreground mb-1 text-center">関連企業がありません</h3>
                         </div>
                     </div>
                 </div>

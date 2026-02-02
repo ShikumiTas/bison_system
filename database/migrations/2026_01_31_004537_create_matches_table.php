@@ -13,16 +13,22 @@ return new class extends Migration
     {
         Schema::create('matches', function (Blueprint $table) {
             $table->id();
-            // 案件への外部キー
+            
+            // 外部キー
             $table->foreignId('project_id')->constrained()->onDelete('cascade');
-            // 企業への外部キー
             $table->foreignId('biz_id')->constrained()->onDelete('cascade');
             
-            // 追加情報：役割（1次下請など）と進捗ステータス
-            $table->string('role')->nullable()->comment('役割');
-            $table->string('status')->default('requesting')->comment('進捗状態');
+            // 追加情報
+            $table->string('role')->nullable()->comment('役割: 1次下請, 2次下請など');
+            $table->string('status')->default('requesting')->comment('進捗状態: 見積中, 受領済など');
+            
+            // メモカラムを追加！ (長文になる可能性を考慮して text型)
+            $table->text('memo')->nullable()->comment('社内メモ・交渉記録');
             
             $table->timestamps();
+
+            // 同じ案件に同じ企業を重複して登録できないようにユニーク制約をかける（推奨）
+            $table->unique(['project_id', 'biz_id']);
         });
     }
 
