@@ -27,7 +27,7 @@ const isEditing = ref(false);
 
 const form = useForm({
     expected_amount: props.project.expected_amount || '',
-    status: props.project.status || 0, // 案件自体のステータス
+    status: props.project.status ?? 0, // 案件自体のステータス（nullを考慮し ?? を使用）
     status_memo: props.project.status_memo || '',
 });
 
@@ -40,17 +40,28 @@ const saveProject = () => {
     });
 };
 
-// ステータスのラベルと色の定義（表示用）
-const getStatusLabel = (status: number) => {
-    const labels: Record<number, { text: string; class: string }> = {
+// ステータスのラベルと色の定義（表示用：数値で統一）
+const getProjectStatus = (project: any) => {
+    const statusMap: Record<number, { text: string; class: string }> = {
         0: { text: '検討中', class: 'bg-slate-500/10 text-slate-600 border-slate-200' },
         1: { text: '調査・準備', class: 'bg-blue-500/10 text-blue-600 border-blue-200' },
-        2: { text: '応札済', class: 'bg-indigo-500/10 text-indigo-600 border-indigo-200' },
-        3: { text: '落札', class: 'bg-emerald-500/10 text-emerald-600 border-emerald-200' },
-        4: { text: '辞退・失注', class: 'bg-rose-500/10 text-rose-600 border-rose-200' },
-        5: { text: '完了', class: 'bg-amber-500/10 text-amber-600 border-amber-200' },
+        2: { text: '応札済', class: 'bg-indigo-500/10 text-indigo-700 border-indigo-200' },
+        3: { text: '落札', class: 'bg-emerald-500/10 text-emerald-700 border-emerald-200' },
+        4: { text: '辞退・失注', class: 'bg-rose-500/10 text-rose-700 border-rose-200' },
+        5: { text: '完了', class: 'bg-amber-500/10 text-amber-700 border-amber-200' },
     };
-    return labels[status] || { text: '不明', class: '' };
+
+    // 1. DBの status カラムを優先参照
+    if (project.status !== undefined && project.status !== null && statusMap[project.status]) {
+        return statusMap[project.status];
+    }
+
+    // 2. statusが0または未定義の場合、参画企業がいれば「調査・準備(1)」とみなすフォールバック
+    if (props.relatedBizs && props.relatedBizs.length > 0) {
+        return statusMap[1];
+    }
+
+    return statusMap[0];
 };
 
 const formatDate = (dateStr: string | null) => {
@@ -102,8 +113,8 @@ const breadcrumbs = [
                         <Badge variant="outline" class="border-primary/20 text-primary font-mono text-[10px] bg-primary/5">
                             ID: #{{ project.project_external_id || project.id }}
                         </Badge>
-                        <Badge variant="outline" :class="[getStatusLabel(project.status).class, 'text-[10px] font-bold']">
-                            {{ getStatusLabel(project.status).text }}
+                        <Badge variant="outline" :class="[getProjectStatus(project).class, 'text-[10px] font-bold border']">
+                            {{ getProjectStatus(project).text }}
                         </Badge>
                     </div>
                     <h1 class="text-xl font-black tracking-tight text-foreground leading-tight">
@@ -120,9 +131,9 @@ const breadcrumbs = [
                                 class="w-full text-xs border border-input bg-background rounded-md px-2 py-1.5 font-bold cursor-pointer focus:ring-2 ring-primary/20 outline-none"
                             >
                                 <option :value="0">検討中</option>
-                                <option :value="1">調査・準備中</option>
-                                <option :value="2">応札済み</option>
-                                <option :value="3">落札（成功）</option>
+                                <option :value="1">調査・準備</option>
+                                <option :value="2">応札済</option>
+                                <option :value="3">落札</option>
                                 <option :value="4">辞退・失注</option>
                                 <option :value="5">完了</option>
                             </select>
@@ -151,29 +162,29 @@ const breadcrumbs = [
                     </div>
 
                     <template v-else>
-                        <div class="p-3 rounded-lg bg-blue-500/5 border border-blue-500/10">
+                        <div class="p-3 rounded-lg bg-blue-500/5 border border-blue-500/10 text-left">
                             <label class="text-[10px] font-bold uppercase tracking-widest text-blue-600 block mb-1">想定金額</label>
                             <p class="text-lg font-black text-foreground">{{ formatCurrency(project.expected_amount) }}</p>
                         </div>
-                        <div v-if="project.status_memo" class="p-3 rounded-lg bg-amber-500/5 border border-amber-500/10">
+                        <div v-if="project.status_memo" class="p-3 rounded-lg bg-amber-500/5 border border-amber-500/10 text-left">
                             <label class="text-[10px] font-bold uppercase tracking-widest text-amber-600 block mb-1">状況メモ</label>
                             <p class="text-[11px] text-muted-foreground whitespace-pre-wrap leading-relaxed">{{ project.status_memo }}</p>
                         </div>
                     </template>
 
-                    <div>
+                    <div class="text-left">
                         <label class="text-[10px] font-bold uppercase tracking-widest text-muted-foreground block mb-2">発注機関 / 所在地</label>
                         <div class="space-y-2 pl-1">
                             <p class="font-bold text-foreground flex items-center gap-2 text-sm">
                                 <Building2 class="w-4 h-4 text-primary/60" /> {{ project.organization || '不明' }}
                             </p>
-                            <p class="text-xs text-muted-foreground flex items-start gap-2 leading-relaxed">
+                            <p class="text-xs text-muted-foreground flex items-start gap-2 leading-relaxed text-left">
                                 <MapPin class="w-4 h-4 shrink-0 opacity-50" /> {{ project.organization_address || '住所情報なし' }}
                             </p>
                         </div>
                     </div>
 
-                    <div class="p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
+                    <div class="p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-left">
                         <label class="text-[10px] font-bold uppercase tracking-widest text-emerald-600 block mb-1.5">履行/納品場所</label>
                         <p class="text-xs font-bold text-foreground flex items-start gap-2">
                             <Truck class="w-4 h-4 shrink-0 text-emerald-500" /> {{ project.delivery_location || '仕様書による' }}
@@ -182,13 +193,13 @@ const breadcrumbs = [
 
                     <div class="grid grid-cols-2 gap-3">
                         <div class="p-3 rounded-lg bg-muted border border-border text-left">
-                            <label class="text-[10px] font-bold uppercase tracking-widest text-muted-foreground block mb-1 text-left">公示日</label>
+                            <label class="text-[10px] font-bold uppercase tracking-widest text-muted-foreground block mb-1">公示日</label>
                             <p class="text-xs font-bold text-foreground flex items-center gap-2 truncate">
                                 <Calendar class="w-3.5 h-3.5 text-primary/60" /> {{ formatDate(project.notice_date) }}
                             </p>
                         </div>
                         <div class="p-3 rounded-lg bg-muted border border-border text-left">
-                            <label class="text-[10px] font-bold uppercase tracking-widest text-muted-foreground block mb-1 text-left">入札日</label>
+                            <label class="text-[10px] font-bold uppercase tracking-widest text-muted-foreground block mb-1">入札日</label>
                             <p class="text-xs font-bold text-foreground flex items-center gap-2 truncate">
                                 <Clock class="w-3.5 h-3.5 text-orange-500/60" /> {{ formatDate(project.bid_date) }}
                             </p>
@@ -296,7 +307,8 @@ const breadcrumbs = [
 
                         <div v-if="relatedBizs.length === 0" class="border-2 border-dashed border-border rounded-xl p-10 md:p-16 text-center text-muted-foreground bg-card/30">
                             <Building2 class="w-8 h-8 opacity-20 text-foreground mx-auto mb-4" />
-                            <h3 class="text-base font-bold text-foreground mb-1 text-center">関連企業がありません</h3>
+                            <h3 class="text-base font-bold text-foreground mb-1">関連企業がありません</h3>
+                            <p class="text-xs">右上の検索から企業を紐付けてください</p>
                         </div>
                     </div>
                 </div>

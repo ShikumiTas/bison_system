@@ -15,16 +15,17 @@ class ProjectController extends Controller
 {
     public function index(Request $request, IndexAction $case)
     {
-        $post = $request->all();
+        // リクエストパラメータを取得
+        $params = $request->all();
         
-        list($projects, ) = $case($post);
+        list($projects, $extraData) = $case($params);
 
         return Inertia::render('Project/index', [
             'projects' => $projects,
-
+            'filters'  => $request->only(['keyword', 'status']), // ここを追加
         ]);
     }
-
+    
     public function edit(Request $request, FormAction $case, $id = 0)
     {
         // UseCase内でリレーションがロードされた $project を取得
@@ -40,6 +41,7 @@ class ProjectController extends Controller
     {
         // バリデーション
         $data = $request->validate([
+            'status'          => 'required|integer|between:0,5',
             'expected_amount' => 'nullable|numeric',
             'status_memo'     => 'nullable|string',
         ]);
