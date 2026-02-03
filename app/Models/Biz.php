@@ -4,52 +4,50 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 
-class Biz extends Model {
+class Biz extends Model
+{
     protected $guarded = ['id'];
 
-    // リレーション
-    public function scores()
-    {
-        return $this->hasMany(BizScore::class, 'biz_id');
-    }
-    public function financial() { return $this->hasOne(BizFinancial::class); }
-    public function comments() { return $this->hasMany(BizComment::class); }
+    // --- 画面表示に必要なリレーション（これらが抜けていたためエラーが出ていました） ---
 
-    /**
-     * 最新のスコアを取得
-     */
     public function latestScore() {
-        return $this->hasOne(BizScore::class)->latestOfMany();
+        return $this->hasOne(BizScore::class, 'biz_id')->latestOfMany();
     }
 
-    /**
-     * マッチング（案件実績）
-     */
     public function matches() {
-        // ProjectMatchモデルを指すように変更
         return $this->hasMany(ProjectMatch::class, 'biz_id');
     }
 
-    /**
-     * 参画案件（直通）
-     */
+    public function scores() {
+        return $this->hasMany(BizScore::class, 'biz_id');
+    }
+
+    public function financial() {
+        return $this->hasOne(BizFinancial::class);
+    }
+
+    public function comments() {
+        return $this->hasMany(BizComment::class);
+    }
+
     public function projects() {
         return $this->belongsToMany(Project::class, 'matches', 'biz_id', 'project_id')
                     ->withPivot(['role', 'status'])
                     ->withTimestamps();
-    }    
-    /**
-     * 許可番号の正規化 (大臣 00-000135 -> 00100000135)
-     * $pref: '00', '23' / $type: 1(般), 2(特) / $num: '135'
-     */
-    public static function normalizeId($pref, $type, $num) {
-        $cleanNum = preg_replace('/[^0-9]/', '', $num);
-        return sprintf('%02s%1d%08d', $pref, $type, $cleanNum);
     }
 
-    /**
-     * 手動登録用IDの発行 (99 + 連番)
-     */
+    // --- ID処理ロジック ---
+
+    public static function normalizeId($raw) {
+        $clean = trim(str_replace(' ', '', (string)$raw));
+        if (empty($clean) || $clean === '手動登録') return null;
+
+        $parts = explode('-', $clean);
+        $pref = str_pad($parts[0] ?? '00', 2, '0', STR_PAD_LEFT);
+        $num = isset($parts[1]) ? preg_replace('/[^0-9]/', '', $parts[1]) : '0';
+        return sprintf('%02s%1d%08d', $pref, 1, $num);
+    }
+
     public static function generateManualId() {
         $max = self::where('permit_id', 'like', '99%')->max('permit_id');
         $next = $max ? (int)substr($max, 2) + 1 : 1;

@@ -4,129 +4,98 @@ namespace App\Console\Commands;
 
 use Illuminate\Console\Command;
 use App\Models\Biz;
-use App\Models\BizScore;
 use App\Models\BizFinancial;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
 
 class ImportBizs extends Command
 {
+    // 引数 path を必須にします
     protected $signature = 'import:bizs {path}';
-    protected $description = '企業経審CSVデータをインポートします';
-
-    // 工種名と「許可区分」列のインデックス対応
-    private $categories = [
-        '土木一式' => 11, 'プレストレスト' => 23, '建築一式' => 35, '大工' => 47,
-        '左官' => 59, 'とび・土工' => 71, '石' => 83, '屋根' => 95,
-        '電気' => 107, '管' => 119, 'タイル・れんが' => 131, '鋼構造物' => 143,
-        '鉄筋' => 155, '舗装' => 167, 'しゅんせつ' => 179, '板金' => 191,
-        'ガラス' => 203, '塗装' => 215, '防水' => 227, '内装仕上' => 239,
-        '機械器具設置' => 251, '熱絶縁' => 263, '電気通信' => 275, '造園' => 287,
-        'さく井' => 299, '建具' => 311, '水道施設' => 323, '消防施設' => 335,
-        '清掃' => 347, '解体' => 359
-    ];
+    protected $description = 'CSVインポート（パス指定・列固定版）';
 
     public function handle()
     {
-        $path = $this->argument('path');
-        if (!file_exists($path)) {
-            $this->error("File not found: {$path}");
+        $inputPath = $this->argument('path');
+        $path = null;
+
+        // 指定されたパスを順番に確認（Sail環境のパス解決）
+        $locations = [
+            $inputPath,
+            storage_path('app/private/' . $inputPath),
+            storage_path('app/' . $inputPath),
+        ];
+
+        foreach ($locations as $loc) {
+            if (file_exists($loc)) {
+                $path = $loc;
+                break;
+            }
+        }
+
+        if (!$path) {
+            $this->error("ファイルが見つかりません: {$inputPath}");
             return;
         }
 
-        $this->info("インポートを開始します...");
-        set_time_limit(0); 
-        ini_set('memory_limit', '1G'); 
+        $this->info("Importing: {$path}");
 
         $content = file_get_contents($path);
-        $content = mb_convert_encoding($content, 'UTF-8', 'ASCII,JIS,UTF-8,CP932,SJIS-win');
+        $content = mb_convert_encoding($content, 'UTF-8', 'SJIS-win,UTF-8');
         $file = fopen('php://temp', 'r+');
         fwrite($file, $content);
         rewind($file);
 
-        fgetcsv($file); // ヘッダースキップ
+        fgetcsv($file); // ヘッダーを1行飛ばす
 
         $count = 0;
         DB::beginTransaction();
-
         try {
             while (($row = fgetcsv($file)) !== FALSE) {
-                if (empty($row[4])) continue;
+                // Book2.csv の列構成に基づき、インデックスを完全に固定
+                $name = trim($row[2] ?? ''); // 3列目: 社名
+                if (empty($name)) continue;
 
-                $permitId = $this->generatePermitId($row[4]);
+                $rawPermit = trim($row[4] ?? ''); // 5列目: 許可番号
+                
+                // 許可番号があれば正規化、なければ手動ID発行
+                $permitId = Biz::normalizeId($rawPermit);
+                $isManual = false;
+                if (!$permitId) {
+                    $permitId = Biz::generateManualId();
+                    $isManual = true;
+                }
 
-                // 1. bizs (基本情報)
                 $biz = Biz::updateOrCreate(
                     ['permit_id' => $permitId],
                     [
-                        'company_name'      => $row[2],
-                        'representative_name'=> $row[3],
-                        'permit_number_raw' => $row[4],
-                        'zip_code'          => $row[0],
-                        'address'           => $row[1],
-                        'phone_number'      => $row[6],
-                        'city_code'         => $row[7],
-                        'capital'           => $this->toNumeric($row[8]) * 1000,
-                        'sales_ratio'       => (float)($row[9] ?? 0),
-                        'admin_section'     => $row[10] ?? null,
-                        'review_base_date'  => $this->parseDate($row[5]),
-                        'is_manual'         => false,
+                        'company_name'       => $name,
+                        'representative_name'=> $row[3] ?? null, // 4列目
+                        'permit_number_raw'  => $rawPermit ?: '手動登録',
+                        'zip_code'           => $row[0] ?? null, // 1列目
+                        'address'            => $row[1] ?? null, // 2列目
+                        'review_base_date'   => $this->parseDate($row[5] ?? null), // 6列目
+                        'phone_number'       => $row[6] ?? null, // 7列目
+                        'city_code'          => $row[7] ?? null, // 8列目
+                        'capital'            => $this->toNumeric($row[8] ?? 0), // 9列目
+                        'sales_ratio'        => (float)($row[9] ?? 0), // 10列目
+                        'is_manual'          => $isManual,
                     ]
                 );
-
-                // 2. biz_scores (工種別スコア + 詳細JSON)
-                foreach ($this->categories as $name => $idx) {
-                    $permitType = $row[$idx] ?? null;
-                    if (!$permitType || $permitType === '無') continue;
-
-                    // 12項目セット内の詳細データを共通キーで抽出
-                    $details = [
-                        '評点X1'      => $row[$idx + 3] ?? null,
-                        '元請完工高'   => $this->toNumeric($row[$idx + 4] ?? 0) * 1000,
-                        '一級技術者'   => $row[$idx + 5] ?? '0',
-                        '講習受講'     => $row[$idx + 6] ?? '0',
-                        '監理技術者補佐'=> $row[$idx + 7] ?? '0',
-                        '基幹技能者'   => $row[$idx + 8] ?? '0',
-                        '二級技術者'   => $row[$idx + 9] ?? '0',
-                        'その他技術者' => $row[$idx + 10] ?? '0',
-                        '評点Z'       => $row[$idx + 11] ?? null,
-                    ];
-
-                    BizScore::updateOrCreate(
-                        ['biz_id' => $biz->id, 'work_category' => $name],
-                        [
-                            'permit_type' => $permitType,
-                            'p_score'     => (int)($row[$idx + 1] ?? 0),
-                            'avg_sales'   => $this->toNumeric($row[$idx + 2] ?? 0) * 1000,
-                            'details'     => $details, // JSONとして保存
-                        ]
-                    );
-                }
 
                 BizFinancial::updateOrCreate(['biz_id' => $biz->id], []);
                 $count++;
             }
             DB::commit();
-            $this->info("成功: {$count} 件の企業データをインポートしました。");
-
+            $this->info("Successfully imported {$count} items.");
         } catch (\Exception $e) {
             DB::rollBack();
-            $this->error("エラー発生: " . $e->getMessage());
+            $this->error("Error: " . $e->getMessage());
         }
-
-        fclose($file);
-    }
-
-    private function generatePermitId($raw) {
-        $parts = explode('-', str_replace(' ', '', $raw));
-        $pref = str_pad($parts[0] ?? '00', 2, '0', STR_PAD_LEFT);
-        $num  = isset($parts[1]) ? (int)$parts[1] : 0;
-        return sprintf('%02s%1d%08d', $pref, 1, $num);
     }
 
     private function toNumeric($val) {
-        if (is_numeric($val)) return $val;
-        $clean = str_replace(',', '', $val);
+        $clean = str_replace(',', '', (string)$val);
         return is_numeric($clean) ? (int)$clean : 0;
     }
 

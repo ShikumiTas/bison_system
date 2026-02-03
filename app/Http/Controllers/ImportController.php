@@ -6,40 +6,39 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
+use App\UseCases\Import\CheckAction;
 
 class ImportController extends Controller
 {
-    public function index()
-    {
-        // ここで 'flash' => [] を定義してしまうと、
-        // Middleware(HandleInertiaRequests) で設定した共有データが消えるので、シンプルに render だけにする
-        return Inertia::render('Import');
-    }
+    public function index() { return Inertia::render('Import'); }
 
-    public function store(Request $request)
+    public function store(Request $request, CheckAction $checkAction)
     {
-        // バリデーションを有効化
-        $request->validate([
-            'type' => 'required|in:projects,bizs',
-            'csv_file' => 'required|file', // mimes:csv は環境によって txt と判定されることがあるので一旦緩めてもOK
-        ]);
+        $mode = $request->input('mode', 'preview');
 
-        // 1. ファイルを一時保存 (storage/app/private/imports 等に保存されます)
-        $path = $request->file('csv_file')->store('imports');
+        if ($mode === 'preview') {
+            $request->validate(['csv_file' => 'required|file', 'type' => 'required']);
+            $path = $request->file('csv_file')->store('imports', 'local');
+            
+            // CheckAction側で許可番号空を許容するように修正が必要
+            $results = $checkAction->execute($path, $request->type);
+
+            return back()->with([
+                'import_results' => $results,
+                'temp_file_path' => $path,
+                'import_type'    => $request->type,
+                'message'        => '整合性チェック完了'
+            ]);
+        }
+
+        // 確定実行
+        $tempPath = $request->input('temp_path');
+        $command = ($request->type === 'project') ? 'import:projects' : 'import:bizs';
         
-        // storage_path('app/' . $path) が一般的ですが、Laravel11等の最新構成なら
-        // storage_path('app/private/' . $path) になる場合があるため確認が必要です
-        // $fullPath = storage_path('app/' . $path);
-        // 2. 「ストレージの仕組み」にフルパスを計算させる（これが確実！）
-            $fullPath = Storage::path($path);
-        // 2. コマンドの選択
-        $command = $request->type === 'projects' ? 'import:projects' : 'import:bizs';
-
-        // 3. バックグラウンドで実行
         Artisan::queue($command, [
-            'path' => $fullPath
+            'path' => Storage::disk('local')->path($tempPath)
         ]);
 
-        return back()->with('message', 'アップロードが完了しました。バックグラウンドで処理を開始します。');
+        return back()->with('message', 'バックグラウンドで処理を開始しました。');
     }
 }

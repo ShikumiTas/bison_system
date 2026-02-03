@@ -42,12 +42,18 @@ class HandleInertiaRequests extends Middleware
                 'user' => $request->user(),
             ],
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
-            // これだけ追加！
-            'flash' => ['message' => $request->session()->get('message')],
-            // 【重要】これを追加しないとバリデーションエラーがVueに届きません
+            
+            // ここを修正：import_results なども Vue に渡るように拡張します
+            'flash' => [
+                'message' => $request->session()->get('message'),
+                'import_results' => $request->session()->get('import_results'), // これが必要！
+                'temp_file_path' => $request->session()->get('temp_file_path'), // これが必要！
+                'import_type' => $request->session()->get('import_type'),       // これが必要！
+            ],
+
             'errors' => fn () => $request->session()->get('errors') 
-            ? $request->session()->get('errors')->getBag('default')->getMessages() 
-            : (object) [],
+                ? $request->session()->get('errors')->getBag('default')->getMessages() 
+                : (object) [],
         ];
     }
 }
