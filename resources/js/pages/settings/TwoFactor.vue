@@ -25,7 +25,7 @@ withDefaults(defineProps<Props>(), {
 
 const breadcrumbs: BreadcrumbItem[] = [
     {
-        title: 'Two-Factor Authentication',
+        title: '二要素認証',
         href: show.url(),
     },
 ];
@@ -40,29 +40,27 @@ onUnmounted(() => {
 
 <template>
     <AppLayout :breadcrumbs="breadcrumbs">
-        <Head title="Two-Factor Authentication" />
+        <Head title="二要素認証" />
 
-        <h1 class="sr-only">Two-Factor Authentication Settings</h1>
+        <h1 class="sr-only">二要素認証設定</h1>
 
         <SettingsLayout>
             <div class="space-y-6">
                 <Heading
                     variant="small"
-                    title="Two-Factor Authentication"
-                    description="Manage your two-factor authentication settings"
+                    title="二要素認証 (2FA)"
+                    description="アカウントのセキュリティを強化するための二要素認証設定を管理します"
                 />
 
                 <div
                     v-if="!twoFactorEnabled"
                     class="flex flex-col items-start justify-start space-y-4"
                 >
-                    <Badge variant="destructive">Disabled</Badge>
+                    <Badge variant="destructive">無効</Badge>
 
-                    <p class="text-muted-foreground">
-                        When you enable two-factor authentication, you will be
-                        prompted for a secure pin during login. This pin can be
-                        retrieved from a TOTP-supported application on your
-                        phone.
+                    <p class="text-muted-foreground text-sm">
+                        二要素認証を有効にすると、ログイン時に安全な認証コード（PIN）の入力が求められます。
+                        このコードは、スマートフォンの「Google Authenticator」などのTOTP対応アプリから取得できます。
                     </p>
 
                     <div>
@@ -70,7 +68,7 @@ onUnmounted(() => {
                             v-if="hasSetupData"
                             @click="showSetupModal = true"
                         >
-                            <ShieldCheck />Continue Setup
+                            <ShieldCheck />設定を続ける
                         </Button>
                         <Form
                             v-else
@@ -79,7 +77,7 @@ onUnmounted(() => {
                             #default="{ processing }"
                         >
                             <Button type="submit" :disabled="processing">
-                                <ShieldCheck />Enable 2FA</Button
+                                <ShieldCheck />二要素認証を有効にする</Button
                             ></Form
                         >
                     </div>
@@ -89,13 +87,11 @@ onUnmounted(() => {
                     v-else
                     class="flex flex-col items-start justify-start space-y-4"
                 >
-                    <Badge variant="default">Enabled</Badge>
+                    <Badge variant="default">有効</Badge>
 
-                    <p class="text-muted-foreground">
-                        With two-factor authentication enabled, you will be
-                        prompted for a secure, random pin during login, which
-                        you can retrieve from the TOTP-supported application on
-                        your phone.
+                    <p class="text-muted-foreground text-sm">
+                        二要素認証が有効になっています。ログイン時に、スマートフォンのTOTP対応アプリで生成される
+                        ランダムな認証コードを入力してください。
                     </p>
 
                     <TwoFactorRecoveryCodes />
@@ -108,7 +104,7 @@ onUnmounted(() => {
                                 :disabled="processing"
                             >
                                 <ShieldBan />
-                                Disable 2FA
+                                二要素認証を解除する
                             </Button>
                         </Form>
                     </div>

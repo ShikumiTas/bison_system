@@ -40,31 +40,27 @@ const { isCurrentUrl } = useCurrentUrl();
 
 <script setup lang="ts">
 import {
-    SidebarGroup,
-    SidebarGroupLabel,
-    SidebarMenu,
-    SidebarMenuButton,
-    SidebarMenuItem,
-    // 👇 これらが不足していると縦に並びません
-    SidebarMenuSub,
-    SidebarMenuSubButton,
-    SidebarMenuSubItem,
-
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarMenuSub,
+  SidebarMenuSubButton,
+  SidebarMenuSubItem,
 } from '@/components/ui/sidebar';
 
-import { 
-    Collapsible, 
-    CollapsibleContent, 
-    CollapsibleTrigger 
-} from '@/components/ui/collapsible'; // 👈 パカパカの本体
-import { ChevronRight } from 'lucide-vue-next'; // 👈 矢印アイコン
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger
+} from '@/components/ui/collapsible';
+import { ChevronRight } from 'lucide-vue-next';
 
 import { useCurrentUrl } from '@/composables/useCurrentUrl';
 import { type NavItem } from '@/types';
 import { Link } from '@inertiajs/vue3';
 
 defineProps<{
-    items: NavItem[];
+  items: NavItem[];
 }>();
 
 const { isCurrentUrl } = useCurrentUrl();
@@ -72,38 +68,40 @@ const { isCurrentUrl } = useCurrentUrl();
 
 <template>
   <SidebarMenu>
-    <Collapsible
-      v-for="item in items"
-      :key="item.title"
-      v-slot="{ open }"
-      as-child
-      :default-open="item.isActive"
-      class="group/collapsible"
-    >
-      <SidebarMenuItem>
-        <CollapsibleTrigger as-child>
-          <SidebarMenuButton :tooltip="item.title">
-            <component :is="item.icon" v-if="item.icon" :class="{ 'text-primary': open }" />
+    <template v-for="item in items" :key="item.title">
+      <Collapsible v-if="item.items && item.items.length > 0" v-slot="{ open }" as-child :default-open="item.isActive"
+        class="group/collapsible">
+        <SidebarMenuItem>
+          <CollapsibleTrigger as-child>
+            <SidebarMenuButton :tooltip="item.title" :is-active="item.href ? isCurrentUrl(item.href) : false">
+              <component :is="item.icon" v-if="item.icon" :class="{ 'text-primary': open }" />
+              <span>{{ item.title }}</span>
+              <ChevronRight class="ml-auto transition-transform duration-200" :class="{ 'rotate-90': open }" />
+            </SidebarMenuButton>
+          </CollapsibleTrigger>
+
+          <CollapsibleContent>
+            <SidebarMenuSub>
+              <SidebarMenuSubItem v-for="subItem in item.items" :key="subItem.title">
+                <SidebarMenuSubButton as-child :is-active="isCurrentUrl(subItem.href)">
+                  <Link :href="subItem.href">
+                    <span>{{ subItem.title }}</span>
+                  </Link>
+                </SidebarMenuSubButton>
+              </SidebarMenuSubItem>
+            </SidebarMenuSub>
+          </CollapsibleContent>
+        </SidebarMenuItem>
+      </Collapsible>
+
+      <SidebarMenuItem v-else>
+        <SidebarMenuButton as-child :tooltip="item.title" :is-active="isCurrentUrl(item.href)">
+          <Link :href="item.href">
+            <component :is="item.icon" v-if="item.icon" />
             <span>{{ item.title }}</span>
-            <ChevronRight 
-              class="ml-auto transition-transform duration-200" 
-              :class="{ 'rotate-90': open }"
-            />
-          </SidebarMenuButton>
-        </CollapsibleTrigger>
-        
-        <CollapsibleContent>
-          <SidebarMenuSub>
-            <SidebarMenuSubItem v-for="subItem in item.items" :key="subItem.title">
-              <SidebarMenuSubButton as-child>
-                <Link :href="subItem.href">
-                  <span>{{ subItem.title }}</span>
-                </Link>
-              </SidebarMenuSubButton>
-            </SidebarMenuSubItem>
-          </SidebarMenuSub>
-        </CollapsibleContent>
+          </Link>
+        </SidebarMenuButton>
       </SidebarMenuItem>
-    </Collapsible>
+    </template>
   </SidebarMenu>
 </template>

@@ -155,9 +155,10 @@ const formatMoney = (val) => {
                                 </div>
                             </div>
 
-                            <div v-if="!biz.matches?.length" class="flex flex-col items-center justify-center py-16 bg-white/50 rounded-3xl border-2 border-dashed border-slate-200">
-                                <Briefcase class="w-8 h-8 text-slate-200 mb-3" />
-                                <p class="text-xs font-bold text-slate-400">登録されている実績はありません</p>
+                            <div v-if="!biz.matches?.length" 
+                                class="flex flex-col items-center justify-center py-16 bg-slate-950/[0.03] dark:bg-black/40 rounded-3xl border-2 border-dashed border-slate-200 dark:border-slate-800 transition-colors">
+                                <Briefcase class="w-8 h-8 text-slate-300 dark:text-slate-700 mb-3" />
+                                <p class="text-xs font-bold text-slate-400 dark:text-slate-500">登録されている実績はありません</p>
                             </div>
                         </div>
                     </section>
