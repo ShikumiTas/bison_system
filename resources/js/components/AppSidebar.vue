@@ -20,8 +20,7 @@ import AppLogo from './AppLogo.vue';
 
 const mainNavItems: NavItem[] = [
     {
-        // title: 'ダッシュボード',
-        title: 'dashboard',
+        title: 'ダッシュボード',
         href: dashboard(), // 修正：dashboard() 関数を直接呼び出す
         icon: LayoutGrid,
     },
