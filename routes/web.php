@@ -24,36 +24,24 @@ Route::middleware('auth')->group(function () {
     Route::post('/import', [ImportController::class, 'store'])->name('import.store');
     Route::get('/api/biz/search', [BizController::class, 'search'])->name('api.biz.search');
 
-    Route::patch('/project/{id}', [ProjectController::class, 'update'])->name('project.update');
-
-    // 新規紐付け（検索から追加）
-    Route::post('/project/{project}/matching', [ProjectController::class, 'matching'])
-        ->name('project.matching');
-    // 更新（ステータスやメモの保存）
-    Route::patch('/project/{project}/matching/{biz}', [ProjectController::class, 'matching'])
-        ->name('project.matching.update');
-    // 紐付け解除
-    Route::delete('/project/{project}/matching/{biz}', [ProjectController::class, 'unmatching'])
-        ->name('project.unmatching');
-    
-    // 案件管理
+    // 案件管理（ここに紐付け系も全部まとめる）
     Route::prefix('project')->name('project.')->group(function () {
-        // 案件一覧表示
         Route::get('/index', [ProjectController::class, 'index'])->name('index');
-        // 案件情報表示
         Route::get('/edit/{id}', [ProjectController::class, 'edit'])->name('edit');
+        Route::patch('/{id}', [ProjectController::class, 'update'])->name('update');
+
+        // --- 案件に対する企業のマッチング（紐付け）関連 ---
+        // prefixの中なので URLは /project/{project}/matching になる
+        Route::post('/{project}/matching', [ProjectController::class, 'matching'])->name('matching');
+        Route::patch('/{project}/matching/{biz}', [ProjectController::class, 'matching'])->name('matching.update');
+        Route::delete('/{project}/matching/{biz}', [ProjectController::class, 'unmatching'])->name('unmatching');
     });
 
     // 経審・企業管理
     Route::prefix('biz')->name('biz.')->group(function () {
-        // 企業情報一覧表示
         Route::get('/index', [BizController::class, 'index'])->name('index');
-        // 企業情報表示
         Route::get('/edit/{id}', [BizController::class, 'edit'])->name('edit');
-
+        Route::delete('/{id}', [BizController::class, 'destroy'])->name('destroy');
     });
-
-    
 });
-
 require __DIR__.'/settings.php';

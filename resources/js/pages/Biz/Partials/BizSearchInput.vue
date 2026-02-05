@@ -1,16 +1,16 @@
 <script setup lang="ts">
-import { ref, watch, onMounted } from 'vue';
+import { ref, watch, onMounted, computed } from 'vue';
 import { router } from '@inertiajs/vue3';
 import axios from 'axios';
-import { Search, Plus, X, Loader2, Filter, Check, MapPin } from 'lucide-vue-next';
+import { Search, Plus, X, Loader2, Filter, Check, MapPin, AlertCircle } from 'lucide-vue-next';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
 } from '@/components/ui/select';
 
 const props = defineProps({
@@ -37,12 +37,46 @@ const searchForm = ref({
     location: ''
 });
 
-// 検索窓の開閉：状態をリセットし、確実に切り替える
+// 業種が選択されているかどうかの判定
+const isCategorySelected = computed(() => {
+    return !!(searchForm.value.category && searchForm.value.category !== 'all');
+});
+
+const hasActiveFilters = computed(() => {
+    return !!(
+        isCategorySelected.value ||
+        searchForm.value.location ||
+        (isCategorySelected.value && searchForm.value.minScore) || // カテゴリ選択中のみP点バッジを出す
+        searchForm.value.minSales ||
+        searchForm.value.maxSales
+    );
+});
+
+const clearFilter = (key: string) => {
+    if (key === 'sales') {
+        searchForm.value.minSales = '';
+        searchForm.value.maxSales = '';
+    } else if (key === 'category') {
+        searchForm.value.category = 'all';
+        searchForm.value.minScore = ''; // 業種解除時にP点もリセット
+    } else {
+        (searchForm.value as any)[key] = '';
+    }
+    fetchResults();
+};
+
+const formatMoney = (value: number | null) => {
+    if (value === null || value === undefined) return '-';
+    if (value >= 100000000) {
+        return (value / 100000000).toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + '億円';
+    }
+    return (Math.floor(value / 10000)).toLocaleString() + '万円';
+};
+
 const toggleSearch = () => {
     isSearching.value = !isSearching.value;
     if (!isSearching.value) {
-        searchForm.value.keyword = '';
-        searchForm.value.category = '';
+        searchForm.value = { keyword: '', category: '', minScore: '', minSales: '', maxSales: '', location: '' };
         results.value = [];
         isAdvanced.value = false;
     }
@@ -52,7 +86,7 @@ const fetchResults = async () => {
     const cleanKeyword = searchForm.value.keyword?.trim() || '';
     const cleanLocation = searchForm.value.location?.trim() || '';
 
-    if (cleanKeyword.length < 2 && cleanLocation.length < 2) {
+    if (cleanKeyword.length < 2 && cleanLocation.length < 2 && !isCategorySelected.value) {
         results.value = [];
         return;
     }
@@ -60,19 +94,16 @@ const fetchResults = async () => {
     isLoading.value = true;
     try {
         const { category, minScore, minSales, maxSales } = searchForm.value;
-
         const params: any = {
             keyword: cleanKeyword,
             location: cleanLocation || null,
         };
 
-        if (isAdvanced.value) {
-            // "all" が選択されている場合は null を送って全件対象にする
-            params.category = (category && category !== 'all') ? category : null;
-            params.min_score = minScore || null;
-            params.min_sales = minSales || null;
-            params.max_sales = maxSales || null;
-        }
+        params.category = isCategorySelected.value ? category : null;
+        // 業種が選択されている時だけP点をパラメータに含める
+        params.min_score = isCategorySelected.value ? (minScore || null) : null;
+        params.min_sales = minSales ? Number(minSales) * 100000000 : null;
+        params.max_sales = maxSales ? Number(maxSales) * 100000000 : null;
 
         const response = await axios.get(`/api/biz/search`, { params });
         results.value = response.data;
@@ -84,15 +115,13 @@ const fetchResults = async () => {
     }
 };
 
-// フォーム変更の監視
-watch(searchForm, () => {
+watch(searchForm, (newForm, oldForm) => {
+    // 業種が「指定なし」になったらP点を強制クリア
+    if (oldForm.category && (newForm.category === 'all' || !newForm.category)) {
+        searchForm.value.minScore = '';
+    }
     if (isSearching.value) fetchResults();
 }, { deep: true });
-
-// 詳細モードの切り替えでも再検索
-watch(isAdvanced, () => {
-    fetchResults();
-});
 
 const addBiz = (biz: any) => {
     router.post(`/project/${props.projectId}/matching`, {
@@ -133,7 +162,7 @@ const categories = [
         </Button>
 
         <div v-if="isSearching" 
-             class="absolute top-12 right-0 w-[92vw] sm:w-[450px] z-50 bg-popover text-popover-foreground border border-border rounded-2xl shadow-2xl p-4 animate-in fade-in zoom-in-95 slide-in-from-top-2 origin-top-right">
+             class="absolute top-12 right-0 w-[92vw] sm:w-[500px] z-50 bg-popover text-popover-foreground border border-border rounded-2xl shadow-2xl p-4 animate-in fade-in zoom-in-95 slide-in-from-top-2 origin-top-right">
             
             <div class="space-y-3">
                 <div class="flex items-center gap-2">
@@ -159,11 +188,29 @@ const categories = [
                 </div>
             </div>
 
-            <div v-if="isAdvanced" class="mt-3 p-3 bg-muted/40 rounded-xl space-y-3 border border-border/50 animate-in slide-in-from-top-1">
+            <div v-if="hasActiveFilters" class="flex flex-wrap gap-1.5 mt-3 mb-1 animate-in slide-in-from-top-1">
+                <div v-if="isCategorySelected" class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 text-[10px] font-bold border border-blue-200">
+                    {{ searchForm.category }}
+                    <button @click.stop="clearFilter('category')"><X class="w-2.5 h-2.5" /></button>
+                </div>
+                <div v-if="isCategorySelected && searchForm.minScore" class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-orange-100 text-orange-700 text-[10px] font-bold border border-orange-200">
+                    P:{{ searchForm.minScore }}↑
+                    <button @click.stop="clearFilter('minScore')"><X class="w-2.5 h-2.5" /></button>
+                </div>
+                <div v-if="searchForm.minSales || searchForm.maxSales" class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 text-[10px] font-bold border border-emerald-200">
+                    売上:{{ searchForm.minSales || 0 }}~{{ searchForm.maxSales || '∞' }}億
+                    <button @click.stop="clearFilter('sales')"><X class="w-2.5 h-2.5" /></button>
+                </div>
+            </div>
+
+            <div v-if="isAdvanced" class="mt-3 p-3 bg-muted/40 rounded-xl space-y-4 border border-border/50 animate-in slide-in-from-top-1">
                 <div class="space-y-1.5">
-                    <label class="text-[10px] font-bold text-muted-foreground uppercase tracking-wider ml-1">対象業種</label>
+                    <div class="flex justify-between items-center px-1">
+                        <label class="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">対象業種（指定するとP点等を表示）</label>
+                        <span v-if="isCategorySelected" class="text-[9px] text-primary font-bold">適用中</span>
+                    </div>
                     <Select v-model="searchForm.category">
-                        <SelectTrigger class="h-9 text-xs bg-background">
+                        <SelectTrigger :class="['h-9 text-xs transition-all', isCategorySelected ? 'bg-blue-50/50 border-blue-300 ring-1 ring-blue-100' : 'bg-background']">
                             <SelectValue placeholder="すべての業種（指定なし）" />
                         </SelectTrigger>
                         <SelectContent>
@@ -173,27 +220,49 @@ const categories = [
                     </Select>
                 </div>
 
-                <div class="grid grid-cols-3 gap-2">
-                    <div class="space-y-1">
-                        <label class="text-[10px] font-bold text-muted-foreground ml-1">P点(以上)</label>
-                        <Input v-model="searchForm.minScore" type="number" placeholder="800" class="h-8 text-xs bg-background" />
+                <div class="grid grid-cols-3 gap-3">
+                    <div class="space-y-1 relative group">
+                        <label :class="['text-[10px] font-bold ml-1 transition-colors flex items-center gap-1', 
+                            !isCategorySelected ? 'text-muted-foreground/50' : (searchForm.minScore ? 'text-orange-600' : 'text-muted-foreground')]">
+                            P点(以上)
+                            <AlertCircle v-if="!isCategorySelected" class="w-2.5 h-2.5" />
+                        </label>
+                        <div class="relative">
+                            <Input v-model="searchForm.minScore" 
+                                type="number" 
+                                :placeholder="isCategorySelected ? '指定なし' : '業種を選択'" 
+                                :disabled="!isCategorySelected"
+                                :class="['h-8 text-[10px] pr-6 transition-all', 
+                                    !isCategorySelected ? 'bg-muted/50 border-muted-foreground/10 cursor-not-allowed opacity-60' : 
+                                    (searchForm.minScore ? 'border-orange-400 bg-orange-50/30 ring-1 ring-orange-200' : 'bg-background')]" />
+                            <button v-if="searchForm.minScore && isCategorySelected" @click="searchForm.minScore = ''" class="absolute right-1.5 top-1/2 -translate-y-1/2 text-orange-400 hover:text-orange-600"><X class="w-3 h-3" /></button>
+                        </div>
                     </div>
-                    <div class="space-y-1">
-                        <label class="text-[10px] font-bold text-muted-foreground ml-1">売上(億↑)</label>
-                        <Input v-model="searchForm.minSales" type="number" placeholder="1" class="h-8 text-xs bg-background" />
+                    <div class="space-y-1 relative group">
+                        <label :class="['text-[10px] font-bold ml-1 transition-colors', searchForm.minSales ? 'text-emerald-600' : 'text-muted-foreground']">売上(億↑)</label>
+                        <div class="relative">
+                            <Input v-model="searchForm.minSales" type="number" placeholder="指定なし" 
+                                :class="['h-8 text-xs pr-6 transition-all', searchForm.minSales ? 'border-emerald-400 bg-emerald-50/30 ring-1 ring-emerald-200' : 'bg-background']" />
+                            <button v-if="searchForm.minSales" @click="searchForm.minSales = ''" class="absolute right-1.5 top-1/2 -translate-y-1/2 text-emerald-400 hover:text-emerald-600"><X class="w-3 h-3" /></button>
+                        </div>
                     </div>
-                    <div class="space-y-1">
-                        <label class="text-[10px] font-bold text-muted-foreground ml-1">売上(億↓)</label>
-                        <Input v-model="searchForm.maxSales" type="number" placeholder="50" class="h-8 text-xs bg-background" />
+                    <div class="space-y-1 relative group">
+                        <label :class="['text-[10px] font-bold ml-1 transition-colors', searchForm.maxSales ? 'text-emerald-600' : 'text-muted-foreground']">売上(億↓)</label>
+                        <div class="relative">
+                            <Input v-model="searchForm.maxSales" type="number" placeholder="指定なし" 
+                                :class="['h-8 text-xs pr-6 transition-all', searchForm.maxSales ? 'border-emerald-400 bg-emerald-50/30 ring-1 ring-emerald-200' : 'bg-background']" />
+                            <button v-if="searchForm.maxSales" @click="searchForm.maxSales = ''" class="absolute right-1.5 top-1/2 -translate-y-1/2 text-emerald-400 hover:text-emerald-600"><X class="w-3 h-3" /></button>
+                        </div>
                     </div>
                 </div>
+                <p v-if="!isCategorySelected" class="text-[9px] text-muted-foreground/70 italic ml-1">※P点の絞り込みには業種の指定が必要です</p>
             </div>
 
             <div v-if="isLoading" class="flex justify-center p-8">
                 <Loader2 class="w-6 h-6 animate-spin text-primary opacity-70" />
             </div>
 
-            <div v-if="results.length > 0 && !isLoading" class="mt-4 border-t border-border max-h-72 overflow-y-auto pt-2 space-y-1 pr-1 custom-scrollbar">
+            <div v-if="results.length > 0 && !isLoading" class="mt-4 border-t border-border max-h-80 overflow-y-auto pt-2 space-y-1 pr-1 custom-scrollbar">
                 <button v-for="biz in results" :key="biz.id" @click="addBiz(biz)"
                     :disabled="isAlreadyAdded(biz.id)"
                     class="w-full text-left p-3 hover:bg-accent rounded-xl flex justify-between items-center group disabled:opacity-50 transition-all active:scale-[0.98]">
@@ -202,12 +271,20 @@ const categories = [
                             <span :class="isAlreadyAdded(biz.id) ? 'text-muted-foreground' : 'group-hover:text-primary'">{{ biz.company_name }}</span>
                             <span v-if="isAlreadyAdded(biz.id)" class="text-[9px] bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded-full font-medium shrink-0">追加済</span>
                         </div>
-                        <div class="text-[10px] text-muted-foreground truncate flex flex-wrap gap-x-3 gap-y-1 mt-1.5 items-center">
-                            <span class="bg-secondary px-1.5 py-0.5 rounded font-mono text-secondary-foreground">P:{{ biz.target_p_score ?? '-' }}</span>
-                            <span v-if="biz.target_sales" class="text-blue-700 font-bold bg-blue-50 px-1.5 py-0.5 rounded">
-                                {{ (biz.target_sales / 10000).toFixed(1) }}億円
+                        
+                        <div class="text-[10px] text-muted-foreground truncate flex flex-wrap gap-x-2 gap-y-1 mt-1.5 items-center">
+                            <span v-if="biz.company_total_sales" class="bg-emerald-50 text-emerald-700 px-1.5 py-0.5 rounded font-bold border border-emerald-100/50">
+                                年商: {{ formatMoney(biz.company_total_sales) }}
                             </span>
-                            <span class="truncate opacity-80">{{ biz.address }}</span>
+                            <span v-if="isCategorySelected && biz.target_p_score" 
+                                class="bg-orange-50 text-orange-700 px-1.5 py-0.5 rounded font-mono font-bold border border-orange-100">
+                                {{ searchForm.category }} P:{{ biz.target_p_score }}
+                            </span>
+                            <span v-if="isCategorySelected && biz.category_sales" 
+                                class="bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded font-bold border border-blue-100">
+                                工種売上: {{ formatMoney(biz.category_sales) }}
+                            </span>
+                            <span class="truncate opacity-80 ml-1">{{ biz.address }}</span>
                         </div>
                     </div>
                     <div class="shrink-0 ml-2">
@@ -229,11 +306,6 @@ const categories = [
 </template>
 
 <style scoped>
-.custom-scrollbar::-webkit-scrollbar {
-  width: 4px;
-}
-.custom-scrollbar::-webkit-scrollbar-thumb {
-  background-color: hsl(var(--muted));
-  border-radius: 10px;
-}
+.custom-scrollbar::-webkit-scrollbar { width: 4px; }
+.custom-scrollbar::-webkit-scrollbar-thumb { background-color: hsl(var(--muted)); border-radius: 10px; }
 </style>

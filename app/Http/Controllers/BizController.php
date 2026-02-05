@@ -3,10 +3,13 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 
 use App\UseCases\Biz\IndexAction;
 use App\UseCases\Biz\FormAction;
+
+use App\Models\Biz;
 
 class BizController extends Controller
 {
@@ -157,48 +160,111 @@ class BizController extends Controller
     //     return response()->json($query->limit(20)->get());
     // }
 
+    public function destroy($id)
+    {
+        DB::transaction(function () use ($id) {
+            $biz = Biz::findOrFail($id);
+
+            // 1. 中間テーブル（matches）の紐付けのみ解除
+            // これで Project モデルのレコードは一切削除されません
+            $biz->projects()->detach();
+
+            // 2. 企業固有の関連データを削除
+            $biz->scores()->delete();
+            $biz->financial()->delete();
+            // $biz->comments()->delete();
+            // matchesレコードを直接消したい場合はこちらも（detachで消えない場合）
+            $biz->matches()->delete(); 
+
+            // 3. 企業本体を削除
+            $biz->delete();
+        });
+
+        return redirect()->route('biz.index')->with('message', '企業データを削除しました。');
+    }
+
     public function search(Request $request)
     {
-        $query = \App\Models\Biz::query()->select('bizs.*');
+        $query = \App\Models\Biz::query();
 
-        // 場所・キーワード（ここは変更なし）
-        if ($request->filled('location')) { $query->where('address', 'like', "%{$request->location}%"); }
-        if ($request->filled('keyword')) {
-            $keyword = $request->keyword;
-            $query->where(function($q) use ($keyword) {
-                $q->where('company_name', 'like', "%{$keyword}%")->orWhere('permit_id', 'like', "%{$keyword}%");
-            });
-        }
+        try {
+            $query->select('bizs.*');
+            $category = $request->get('category');
 
-        // --- 修正箇所：デフォルト値を null にし、カテゴリがある時だけ AND 条件にする ---
-        $category = $request->get('category'); // '土木一式' を消して null 許容に
+            // 1. 【表示用】常に会社全体の年商を取得
+            $query->addSelect([
+                'company_total_sales' => \App\Models\BizFinancial::select('total_net_sales')
+                    ->whereColumn('biz_id', 'bizs.id')
+                    ->limit(1)
+            ]);
 
-        // 表示用サブクエリ（ここはカテゴリが null でも動くように latest() を維持）
-        $query->addSelect([
-            'target_p_score' => \App\Models\BizScore::select('p_score')
-                ->whereColumn('biz_id', 'bizs.id')
-                ->when($category, fn($q) => $q->where('work_category', $category)) // カテゴリがあれば絞る
-                ->latest()->limit(1),
-            'target_sales' => \App\Models\BizScore::select('avg_sales')
-                ->whereColumn('biz_id', 'bizs.id')
-                ->when($category, fn($q) => $q->where('work_category', $category)) // カテゴリがあれば絞る
-                ->latest()->limit(1)
-        ]);
+            // 2. 【条件分岐】業種指定の有無で絞り込み対象を変える
+            if ($category && $category !== 'all') {
+                // --- 業種指定あり：特定の工種売上(avg_sales)とP点で絞り込む ---
+                $query->addSelect([
+                    'target_p_score' => \App\Models\BizScore::select('p_score')
+                        ->whereColumn('biz_id', 'bizs.id')
+                        ->where('work_category', $category)
+                        ->latest()->limit(1),
+                    'category_sales' => \App\Models\BizScore::select('avg_sales')
+                        ->whereColumn('biz_id', 'bizs.id')
+                        ->where('work_category', $category)
+                        ->latest()->limit(1),
+                ]);
 
-        // カテゴリが指定されている時、または詳細条件がある時だけ絞り込み
-        if ($category || $request->anyFilled(['min_score', 'min_sales', 'max_sales'])) {
-            $query->whereHas('scores', function ($q) use ($category, $request) {
-                if ($category) {
+                $query->whereHas('scores', function ($q) use ($category, $request) {
                     $q->where('work_category', $category);
-                }
-                if ($request->filled('min_score')) { $q->where('p_score', '>=', (int)$request->min_score); }
-                if ($request->filled('min_sales')) { $q->where('avg_sales', '>=', (int)$request->min_sales * 10000); }
-                if ($request->filled('max_sales')) { $q->where('avg_sales', '<=', (int)$request->max_sales * 10000); }
-            });
-        }
-        // -------------------------------------------------------------------
+                    
+                    // 業種売上(avg_sales)で絞り込み
+                    if ($request->filled('min_sales')) {
+                        $q->where('avg_sales', '>=', (float)$request->min_sales);
+                    }
+                    if ($request->filled('max_sales')) {
+                        $q->where('avg_sales', '<=', (float)$request->max_sales);
+                    }
+                    // P点で絞り込み
+                    if ($request->filled('min_score')) {
+                        $q->where('p_score', '>=', (int)$request->min_score);
+                    }
+                });
 
-        $query->orderBy('target_sales', 'desc');
-        return response()->json($query->limit(20)->get());
+                // 並び替え：工種売上順
+                $query->orderByRaw('category_sales IS NULL ASC, category_sales DESC');
+
+            } else {
+                // --- 業種指定なし：会社全体の年商(total_net_sales)で絞り込む ---
+                if ($request->filled('min_sales') || $request->filled('max_sales')) {
+                    $query->whereHas('financial', function ($q) use ($request) {
+                        if ($request->filled('min_sales')) {
+                            $q->where('total_net_sales', '>=', (float)$request->min_sales);
+                        }
+                        if ($request->filled('max_sales')) {
+                            $q->where('total_net_sales', '<=', (float)$request->max_sales);
+                        }
+                    });
+                }
+                // 並び替え：会社全体売上順
+                $query->orderByRaw('company_total_sales IS NULL ASC, company_total_sales DESC');
+            }
+
+            // 3. 基本検索（場所・キーワード）
+            if ($request->filled('location')) {
+                $query->where('address', 'like', "%{$request->location}%");
+            }
+            if ($request->filled('keyword')) {
+                $keyword = $request->keyword;
+                $query->where(function($q) use ($keyword) {
+                    $q->where('company_name', 'like', "%{$keyword}%")
+                    ->orWhere('permit_id', 'like', "%{$keyword}%");
+                });
+            }
+
+            return response()->json($query->limit(20)->get());
+
+        } catch (\Exception $e) {
+            \Log::error("Search Error: " . $e->getMessage());
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
     }
+
 }

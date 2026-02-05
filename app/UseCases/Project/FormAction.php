@@ -24,6 +24,7 @@ class FormAction
                 return array_merge($biz->toArray(), [
                     'status' => $biz->pivot->status,
                     'memo'   => $biz->pivot->memo,
+                    'role'   => $biz->pivot->role,
                     'updated_at_human' => $biz->pivot->updated_at?->diffForHumans(), // 更新時間を「1時間前」のように変換
                 ]);
             });

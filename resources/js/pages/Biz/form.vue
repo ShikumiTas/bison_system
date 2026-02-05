@@ -4,7 +4,7 @@ import { Head } from "@inertiajs/vue3";
 import { 
     Building2, Briefcase, TrendingUp, MapPin, 
     Phone, ShieldCheck, BarChart3, Users, HardHat,
-    ExternalLink, Calendar, Award, Info
+    ExternalLink, Calendar, Award, Info, PieChart, Landmark
 } from 'lucide-vue-next';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
@@ -19,8 +19,10 @@ const breadcrumbs = [
 ];
 
 const formatMoney = (val) => {
-    if (!val) return '-';
-    return (Number(val) / 10000).toLocaleString() + '万円';
+    if (!val && val !== 0) return '-';
+    // 負債や赤字を考慮
+    const prefix = val < 0 ? '▲' : '';
+    return prefix + (Math.abs(Number(val)) / 10000).toLocaleString() + '万円';
 };
 </script>
 
@@ -72,7 +74,7 @@ const formatMoney = (val) => {
 
                     <section>
                         <h3 class="text-[11px] font-bold text-slate-400 mb-4 flex items-center gap-2">
-                            経営規模 <Separator class="flex-1 opacity-50" />
+                            財務・経営規模 <Separator class="flex-1 opacity-50" />
                         </h3>
                         <div class="grid grid-cols-2 gap-2">
                             <div class="bg-slate-50 dark:bg-slate-900 p-3 rounded-xl border border-border">
@@ -83,7 +85,29 @@ const formatMoney = (val) => {
                                 <label class="text-[10px] text-slate-500 block font-bold mb-1 text-center">完工高比率</label>
                                 <p class="text-[13px] font-black tracking-tight text-emerald-600 text-center">{{ biz.sales_ratio }}%</p>
                             </div>
+                            
+                            <div class="bg-indigo-50/50 dark:bg-indigo-900/20 p-3 rounded-xl border border-indigo-100 dark:border-indigo-900/30">
+                                <label class="text-[10px] text-indigo-600 dark:text-indigo-400 block font-bold mb-1 text-center">自己資本比率</label>
+                                <p class="text-[13px] font-black tracking-tight text-indigo-700 dark:text-indigo-300 text-center">
+                                    {{ biz.financials?.equity_ratio ? biz.financials.equity_ratio + '%' : '-' }}
+                                </p>
+                            </div>
+
+                            <div class="bg-blue-50/50 dark:bg-blue-900/20 p-3 rounded-xl border border-blue-100 dark:border-blue-900/30">
+                                <label class="text-[10px] text-blue-600 dark:text-blue-400 block font-bold mb-1 text-center">営業利益</label>
+                                <p :class="['text-[13px] font-black tracking-tight text-center', (biz.financials?.operating_income < 0) ? 'text-red-500' : 'text-blue-700 dark:text-blue-300']">
+                                    {{ formatMoney(biz.financials?.operating_income) }}
+                                </p>
+                            </div>
+
                             <div class="bg-slate-50 dark:bg-slate-900 p-2.5 rounded-xl border border-border col-span-2 flex justify-between items-center px-4">
+                                <label class="text-[10px] text-slate-500 font-bold flex items-center gap-1">
+                                    <Landmark class="w-3 h-3" /> 自己資本(純資産)
+                                </label>
+                                <p class="text-xs font-bold">{{ formatMoney(biz.financials?.net_assets) }}</p>
+                            </div>
+
+                            <div class="bg-slate-50 dark:bg-slate-900 p-2.5 rounded-xl border border-border col-span-2 flex justify-between items-center px-4 opacity-60">
                                 <label class="text-[10px] text-slate-500 font-bold">市区町村コード</label>
                                 <p class="text-xs font-mono font-bold">{{ biz.city_code }}</p>
                             </div>

@@ -12,9 +12,9 @@ use Carbon\Carbon;
 class ImportBizs extends Command
 {
     protected $signature = 'import:bizs {path}';
-    protected $description = 'Book2.csvの列固定に対応しつつ、全ての経審スコアを保存します';
+    protected $description = 'Book2.csvの列固定に対応しつつ、全ての経審スコアと財務データを保存します';
 
-    // 以前のソースでうまくいっていた工種別インデックス（12項目セット）
+    // 成功実績のある工種別インデックス（12項目セット）
     private $categories = [
         '土木一式' => 11, 'プレストレスト' => 23, '建築一式' => 35, '大工' => 47,
         '左官' => 59, 'とび・土工' => 71, '石' => 83, '屋根' => 95,
@@ -40,24 +40,26 @@ class ImportBizs extends Command
         set_time_limit(0);
         ini_set('memory_limit', '1G');
 
+        // 1. 文字コード変換 & BOM（?ｿ）除去
         $content = file_get_contents($path);
+        // BOMをバイナリレベルで削除（これで「none」判定を回避）
+        $content = str_replace("\xEF\xBB\xBF", '', $content); 
         $content = mb_convert_encoding($content, 'UTF-8', 'ASCII,JIS,UTF-8,CP932,SJIS-win');
+
         $file = fopen('php://temp', 'r+');
         fwrite($file, $content);
         rewind($file);
 
-        fgetcsv($file); // ヘッダー
+        $headers = fgetcsv($file); // ヘッダー
 
         $count = 0;
-        DB::beginTransaction();
-        try {
-            while (($row = fgetcsv($file)) !== FALSE) {
-                $name = trim($row[2] ?? '');
-                if (empty($name)) continue;
+        while (($row = fgetcsv($file)) !== FALSE) {
+            $name = trim($row[2] ?? '');
+            if (empty($name)) continue;
 
+            DB::beginTransaction();
+            try {
                 $rawPermit = trim($row[4] ?? '');
-                
-                // Biz.phpに定義した静的メソッドを呼び出し
                 $permitId = Biz::normalizeId($rawPermit) ?: Biz::generateManualId();
                 $isManual = empty($rawPermit);
 
@@ -103,21 +105,35 @@ class ImportBizs extends Command
                             'permit_type' => $permitType,
                             'p_score'     => (int)($row[$idx + 1] ?? 0),
                             'avg_sales'   => $this->toNumeric($row[$idx + 2] ?? 0) * 1000,
-                            'details'     => $details,
+                            // ここでjson_encodeすることでArray to string conversionを回避
+                            'details'     => json_encode($details, JSON_UNESCAPED_UNICODE),
                             'review_base_date' => $biz->review_base_date,
                         ]
                     );
                 }
 
-                BizFinancial::updateOrCreate(['biz_id' => $biz->id], []);
+                // 3. 財務データ (biz_financials)
+                BizFinancial::updateOrCreate(
+                    ['biz_id' => $biz->id],
+                    [
+                        'social_details' => json_encode(['imported' => true], JSON_UNESCAPED_UNICODE),
+                        'raw_snapshot'   => json_encode(array_combine($headers, $row), JSON_UNESCAPED_UNICODE),
+                    ]
+                );
+
+                DB::commit();
                 $count++;
+                
+                if ($count % 100 === 0) $this->info("{$count} records processed...");
+
+            } catch (\Exception $e) {
+                DB::rollBack();
+                $this->error("Row {$count} error: " . $e->getMessage());
+                // 個別のエラー内容を知りたい場合は以下を有効化
+                // Log::error($e->getMessage());
             }
-            DB::commit();
-            $this->info("Successfully imported {$count} items with full scores.");
-        } catch (\Exception $e) {
-            DB::rollBack();
-            $this->error("Error: " . $e->getMessage());
         }
+        $this->info("Successfully imported {$count} items with full scores and financial snapshots.");
     }
 
     private function resolvePath($input) {
@@ -127,7 +143,7 @@ class ImportBizs extends Command
     }
 
     private function toNumeric($val) {
-        $clean = str_replace(',', '', (string)$val);
+        $clean = str_replace([',', ' '], '', (string)$val);
         return is_numeric($clean) ? (int)$clean : 0;
     }
 

@@ -22,8 +22,9 @@ class Biz extends Model
         return $this->hasMany(BizScore::class, 'biz_id');
     }
 
+    // hasOne の第2引数に外部キー 'biz_id' を明示しておくと安心です
     public function financial() {
-        return $this->hasOne(BizFinancial::class);
+        return $this->hasOne(BizFinancial::class, 'biz_id');
     }
 
     public function comments() {

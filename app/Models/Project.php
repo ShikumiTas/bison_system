@@ -34,23 +34,23 @@ class Project extends Model {
                     ->withTimestamps();
     }
 
-    /**
-     * 案件ステータスの更新
-     */
+    // /**
+    //  * 案件ステータスの更新
+    //  */
 
-    public function updateStatusAutomatically()
-    {
-        $bizCount = $this->matchedBizs()->count();
-        $completedCount = $this->matchedBizs()->where('status', 'completed')->count();
+    // public function updateStatusAutomatically()
+    // {
+    //     $bizCount = $this->matchedBizs()->count();
+    //     $completedCount = $this->matchedBizs()->where('status', 'completed')->count();
 
-        if ($bizCount === 0) {
-            $newStatus = 1; // 準備中
-        } elseif ($bizCount > 0 && $bizCount > $completedCount) {
-            $newStatus = 2; // 進行中
-        } elseif ($bizCount > 0 && $bizCount === $completedCount) {
-            $newStatus = 3; // 失注
-        }
+    //     if ($bizCount === 0) {
+    //         $newStatus = 1; // 準備中
+    //     } elseif ($bizCount > 0 && $bizCount > $completedCount) {
+    //         $newStatus = 2; // 進行中
+    //     } elseif ($bizCount > 0 && $bizCount === $completedCount) {
+    //         $newStatus = 3; // 失注
+    //     }
 
-        $this->update(['status_id' => $newStatus]);
-    }
+    //     $this->update(['status_id' => $newStatus]);
+    // }
 }

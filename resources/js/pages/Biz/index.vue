@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import AppLayout from '@/layouts/AppLayout.vue';
 import { type BreadcrumbItem } from '@/types';
-import { Head, useForm, Link } from "@inertiajs/vue3";
+import { Head, useForm, Link, router } from "@inertiajs/vue3"; // routerを追加
 import { 
     Search, Plus, Building2, ArrowRight, Globe, Users, 
-    Phone, MapPin, Briefcase, ChevronRight, ChevronLeft, MoreHorizontal 
+    Phone, MapPin, Briefcase, ChevronRight, ChevronLeft, MoreHorizontal,
+    Trash2 // Trash2を追加
 } from 'lucide-vue-next';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -42,6 +43,15 @@ function submit() {
 function setStatus(status: 'active' | 'all') {
     form.status = status;
     submit();
+}
+
+// 削除処理の追加
+function confirmDelete(id: number) {
+    if (confirm('この企業データを削除しますか？\n※案件データ自体は削除されません。')) {
+        router.delete(`/biz/${id}`, {
+            preserveScroll: true,
+        });
+    }
 }
 
 const getLinkLabel = (label: string) => {
@@ -91,7 +101,7 @@ const getLinkLabel = (label: string) => {
                         <tr>
                             <th class="h-12 px-5 text-left font-bold text-[11px] w-[350px]">企業基本情報</th>
                             <th class="h-12 px-4 text-left font-bold text-[11px]">現在の稼働状況 / 取引実績</th>
-                            <th class="h-12 px-5 text-right font-bold text-[11px] w-[100px]">詳細</th>
+                            <th class="h-12 px-5 text-right font-bold text-[11px] w-[120px]">操作</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y">
@@ -160,21 +170,38 @@ const getLinkLabel = (label: string) => {
                             </td>
 
                             <td class="p-5 text-right align-middle">
-                                <Button variant="ghost" size="icon" as-child class="rounded-full hover:bg-primary hover:text-white transition-all shadow-sm border">
-                                    <Link :href="`/biz/edit/${biz.id}`">
-                                        <ChevronRight class="w-5 h-5" />
-                                    </Link>
-                                </Button>
+                                <div class="flex items-center justify-end gap-2">
+                                    <Button variant="ghost" size="icon" as-child class="rounded-full hover:bg-primary hover:text-white transition-all shadow-sm border">
+                                        <Link :href="`/biz/edit/${biz.id}`">
+                                            <ChevronRight class="w-5 h-5" />
+                                        </Link>
+                                    </Button>
+                                    <Button 
+                                        variant="ghost" 
+                                        size="icon" 
+                                        @click="confirmDelete(biz.id)"
+                                        class="rounded-full hover:bg-red-50 hover:text-red-600 transition-all shadow-sm border border-red-100 text-red-400"
+                                    >
+                                        <Trash2 class="w-4 h-4" />
+                                    </Button>
+                                </div>
                             </td>
                         </tr>
                     </tbody>
                 </table>
 
                 <div class="md:hidden divide-y">
-                    <div v-for="biz in bizs?.data" :key="biz.id" class="p-5 active:bg-muted/50 transition-colors">
-                        <Link :href="`/biz/edit/${biz.id}`" class="block space-y-4">
+                    <div v-for="biz in bizs?.data" :key="biz.id" class="relative transition-colors">
+                        <button 
+                            @click="confirmDelete(biz.id)" 
+                            class="absolute top-4 right-4 z-20 p-2 text-red-300 hover:text-red-600"
+                        >
+                            <Trash2 class="w-4 h-4" />
+                        </button>
+
+                        <Link :href="`/biz/edit/${biz.id}`" class="block p-5 active:bg-muted/50 space-y-4">
                             <div class="flex justify-between items-start">
-                                <div class="font-black text-[16px] text-foreground leading-tight pr-4">{{ biz.company_name }}</div>
+                                <div class="font-black text-[16px] text-foreground leading-tight pr-10">{{ biz.company_name }}</div>
                                 <div class="flex gap-1.5 shrink-0">
                                     <div class="bg-blue-500/10 text-blue-700 dark:text-blue-400 text-[10px] font-black px-2 py-0.5 rounded-md border border-blue-500/20">
                                         施工:{{ biz.ongoing_count ?? 0 }}
