@@ -169,7 +169,7 @@ const categories = [
                     <div class="relative flex-1">
                         <Search class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                         <Input v-model="searchForm.keyword" 
-                               placeholder="企業名または許可番号..." 
+                               placeholder="企業名..." 
                                class="pl-9 h-11 border-none shadow-none focus-visible:ring-1 bg-muted/50 text-base sm:text-sm" 
                                @keyup.enter="fetchResults"
                                auto-focus />

@@ -40,7 +40,8 @@ class IndexAction
             $keyword = $post['keyword'];
             $query->where(function($q) use ($keyword) {
                 $q->where('company_name', 'like', "%{$keyword}%")
-                  ->orWhere('permit_id', 'like', "%{$keyword}%");
+                  ->orWhere('address', 'like', "%{$keyword}%")
+                  ->orWhere('phone_number', 'like', "%{$keyword}%");
             });
         }
 

@@ -6,7 +6,7 @@ import { Head, Link, router, useForm } from "@inertiajs/vue3";
 import { 
     Building2, MoreVertical, Clock, ExternalLink, 
     Calendar, MapPin, Truck, Globe, ShieldCheck, 
-    CheckCircle2, StickyNote, Phone, Edit3, Save, X, DollarSign,
+    CheckCircle2, StickyNote, Phone, Edit3, Save, X, JapaneseYen,
     UserCircle
 } from 'lucide-vue-next';
 import { Button } from '@/components/ui/button';
@@ -157,7 +157,7 @@ const breadcrumbs = [
                         <div>
                             <label class="text-[10px] font-bold uppercase text-primary block mb-1">想定金額</label>
                             <div class="relative">
-                                <DollarSign class="absolute left-2 top-2 w-3.5 h-3.5 text-muted-foreground" />
+                                <JapaneseYen class="absolute left-2 top-2 w-3.5 h-3.5 text-muted-foreground" />
                                 <Input type="number" v-model="form.expected_amount" class="h-8 pl-7 text-xs font-bold" />
                             </div>
                         </div>
