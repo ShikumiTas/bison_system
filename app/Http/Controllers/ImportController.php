@@ -17,10 +17,17 @@ class ImportController extends Controller
         $mode = $request->input('mode', 'preview');
 
         if ($mode === 'preview') {
-            $request->validate(['csv_file' => 'required|file', 'type' => 'required']);
-            $path = $request->file('csv_file')->store('imports', 'local');
+            // ★1. バリデーションのキーを file に変更し、タイプに応じて拡張子チェックを変える
+            $fileRule = $request->type === 'qualification' ? 'required|file|mimes:pdf' : 'required|file';
             
-            // CheckAction側で許可番号空を許容するように修正が必要
+            $request->validate([
+                'file' => $fileRule, 
+                'type' => 'required'
+            ]);
+            
+            // ★2. ここも $request->file('file') に変更
+            $path = $request->file('file')->store('imports', 'local');
+            
             $results = $checkAction->execute($path, $request->type);
 
             return back()->with([
@@ -33,11 +40,20 @@ class ImportController extends Controller
 
         // 確定実行
         $tempPath = $request->input('temp_path');
-        $command = ($request->type === 'project') ? 'import:projects' : 'import:bizs';
         
-        Artisan::queue($command, [
-            'path' => Storage::disk('local')->path($tempPath)
-        ]);
+        // ★3. 資格情報(PDF)用の分岐を追加
+        if ($request->type === 'qualification') {
+            // コマンドではなく、直接Jobをキューに投入する
+            dispatch(new \App\Jobs\AnalyzeQualificationPdfJob(
+                Storage::disk('local')->path($tempPath)
+            ));
+        } else {
+            // CSV系は既存通りコマンドをキューに
+            $command = ($request->type === 'project') ? 'import:projects' : 'import:bizs';
+            Artisan::queue($command, [
+                'path' => Storage::disk('local')->path($tempPath)
+            ]);
+        }
 
         return back()->with('message', 'バックグラウンドで処理を開始しました。');
     }

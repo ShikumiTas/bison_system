@@ -47,12 +47,23 @@ const mainNavItems: NavItem[] = [
         ],
     },
     {
-        title: '外部データの取り込み',
+        title: '入札参加資格管理',
         icon: Folder,
         isActive: false,
         items: [
             {
-                title: '外部データの取り込み',
+                title: '入札参加資格一覧',
+                href: '/qualification/index',
+            },
+        ],
+    },
+    {
+        title: 'データの取り込み',
+        icon: Folder,
+        isActive: false,
+        items: [
+            {
+                title: 'データの取り込み',
                 href: '/import',
             },
         ],

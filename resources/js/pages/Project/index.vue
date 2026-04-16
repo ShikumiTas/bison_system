@@ -32,7 +32,7 @@ const breadcrumbs: BreadcrumbItem[] = [
 
 const form = useForm({
     keyword: props.filters?.keyword || '',
-    status: props.filters?.status || '',
+    is_target: props.filters?.is_target ?? 1, // ここを 0 から 1 に変更
 });
 
 const formatCurrency = (value: number | null) => {
@@ -72,7 +72,6 @@ function submit() {
 </script>
 
 <template>
-
     <Head title="案件一覧" />
     <AppLayout :breadcrumbs="breadcrumbs">
         <div class="p-4 md:p-6 text-left">
@@ -85,17 +84,42 @@ function submit() {
                     <Input v-model="form.keyword" placeholder="案件名・顧客名..." class="h-10 text-sm font-medium"
                         @keyup.enter="submit" />
                 </div>
-                <div class="flex gap-2">
-                    <div class="flex-1 md:w-48">
+                <div class="flex gap-2 items-end">
+                    
+                    <div class="flex-1 md:w-auto">
                         <label
-                            class="md:hidden text-[10px] font-bold text-muted-foreground mb-1 block ml-1">ステータス</label>
-                        <select v-model="form.status"
-                            class="w-full h-10 rounded-md border border-input bg-background px-3 text-sm font-bold focus:ring-2 focus:ring-primary/20 outline-none">
-                            <option value="">全ステータス</option>
-                            <option v-for="i in [0, 1, 2, 3, 4, 5]" :key="i" :value="i">{{ getStatusConfig({ status: i }).label
-                                }}</option>
-                        </select>
+                            class="text-[10px] font-bold text-muted-foreground mb-1 block ml-1 tracking-widest uppercase text-left">対象フラグ</label>
+                        <div class="inline-flex h-10 w-full md:w-auto items-center justify-center rounded-lg bg-muted p-1 text-muted-foreground">
+                            
+                            <button 
+                                type="button"
+                                @click="form.is_target = 1; submit();"
+                                :class="[
+                                    'inline-flex items-center justify-center whitespace-nowrap rounded-md px-4 py-1.5 text-sm font-bold transition-all w-full md:w-32',
+                                    form.is_target === 1 
+                                        ? 'bg-background text-foreground shadow-sm' 
+                                        : 'hover:bg-background/50 hover:text-foreground'
+                                ]"
+                            >
+                                対象案件
+                            </button>
+
+                            <button 
+                                type="button"
+                                @click="form.is_target = 0; submit();"
+                                :class="[
+                                    'inline-flex items-center justify-center whitespace-nowrap rounded-md px-4 py-1.5 text-sm font-bold transition-all w-full md:w-32',
+                                    form.is_target === 0 
+                                        ? 'bg-background text-foreground shadow-sm' 
+                                        : 'hover:bg-background/50 hover:text-foreground'
+                                ]"
+                            >
+                                全て
+                            </button>
+
+                        </div>
                     </div>
+
                     <Button @click="submit" class="h-10 px-6 font-bold shadow-sm self-end md:self-auto">
                         <Search class="w-4 h-4 md:mr-2" />
                         <span class="hidden md:inline">検索する</span>

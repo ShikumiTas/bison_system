@@ -200,7 +200,6 @@ class BizController extends Controller
 
             // 2. 【条件分岐】業種指定の有無で絞り込み対象を変える
             if ($category && $category !== 'all') {
-                // --- 業種指定あり：特定の工種売上(avg_sales)とP点で絞り込む ---
                 $query->addSelect([
                     'target_p_score' => \App\Models\BizScore::select('p_score')
                         ->whereColumn('biz_id', 'bizs.id')
@@ -214,25 +213,20 @@ class BizController extends Controller
 
                 $query->whereHas('scores', function ($q) use ($category, $request) {
                     $q->where('work_category', $category);
-                    
-                    // 業種売上(avg_sales)で絞り込み
                     if ($request->filled('min_sales')) {
                         $q->where('avg_sales', '>=', (float)$request->min_sales);
                     }
                     if ($request->filled('max_sales')) {
                         $q->where('avg_sales', '<=', (float)$request->max_sales);
                     }
-                    // P点で絞り込み
                     if ($request->filled('min_score')) {
                         $q->where('p_score', '>=', (int)$request->min_score);
                     }
                 });
 
-                // 並び替え：工種売上順
                 $query->orderByRaw('category_sales IS NULL ASC, category_sales DESC');
 
             } else {
-                // --- 業種指定なし：会社全体の年商(total_net_sales)で絞り込む ---
                 if ($request->filled('min_sales') || $request->filled('max_sales')) {
                     $query->whereHas('financial', function ($q) use ($request) {
                         if ($request->filled('min_sales')) {
@@ -243,14 +237,20 @@ class BizController extends Controller
                         }
                     });
                 }
-                // 並び替え：会社全体売上順
                 $query->orderByRaw('company_total_sales IS NULL ASC, company_total_sales DESC');
             }
 
-            // 3. 基本検索（場所・キーワード）
-            if ($request->filled('location')) {
+            // 3. 【追加】地域・場所検索の強化
+            // 優先度A: Local Only（案件と同じ市区町村 5桁一致）
+            if ($request->boolean('only_local') && $request->filled('project_city_cd')) {
+                $query->where('city_cd', $request->project_city_cd);
+            } 
+            // 優先度B: location文字列検索
+            elseif ($request->filled('location')) {
                 $query->where('address', 'like', "%{$request->location}%");
             }
+
+            // 4. 基本検索（キーワード）
             if ($request->filled('keyword')) {
                 $keyword = $request->keyword;
                 $query->where(function($q) use ($keyword) {
@@ -266,5 +266,4 @@ class BizController extends Controller
             return response()->json(['error' => $e->getMessage()], 500);
         }
     }
-
 }

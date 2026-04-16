@@ -15,6 +15,7 @@ class UpdateAction
             'status' => $data['status'] ?? 0,
             'expected_amount' => $data['expected_amount'] ?? null,
             'status_memo'     => $data['status_memo'] ?? null,
+            'is_target'       => $data['is_target'] ?? 0,
         ]);
 
         return $project;

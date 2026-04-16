@@ -38,6 +38,14 @@ return [
             'report' => false,
         ],
 
+        // ★ ここから追記
+        'local_secure' => [
+            'driver' => 'local',
+            'root' => storage_path('app/secure_qualifications'), // ファイルが保存される実体パス
+            'throw' => true, // エラー時に例外を投げるようにしておくとデバッグが楽です
+        ],
+        // ★ ここまで
+        
         'public' => [
             'driver' => 'local',
             'root' => storage_path('app/public'),

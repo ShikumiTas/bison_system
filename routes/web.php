@@ -7,6 +7,7 @@ use Laravel\Fortify\Features;
 use App\Http\Controllers\BizController;
 use App\Http\Controllers\ProjectController;
 use App\Http\Controllers\ImportController;
+use App\Http\Controllers\QualificationController;
 
 Route::get('/', function () {
     return Inertia::render('Welcome', [
@@ -43,5 +44,21 @@ Route::middleware('auth')->group(function () {
         Route::get('/edit/{id}', [BizController::class, 'edit'])->name('edit');
         Route::delete('/{id}', [BizController::class, 'destroy'])->name('destroy');
     });
+
+    // 入札参加資格管理 (Qualification)
+    Route::prefix('qualification')->name('qualification.')->group(function () {
+        Route::get('/index', [QualificationController::class, 'index'])->name('index');
+        Route::get('/create', [QualificationController::class, 'create'])->name('create');
+        Route::post('/store', [QualificationController::class, 'store'])->name('store');
+        
+        // ★ {id} を {qualification} に書き換えることで自動でインスタンス化される
+        Route::get('/edit/{qualification}', [QualificationController::class, 'edit'])->name('edit');
+        Route::patch('/{qualification}', [QualificationController::class, 'update'])->name('update');
+        Route::delete('/{qualification}', [QualificationController::class, 'destroy'])->name('destroy');
+
+        // PDF表示（ここは最初から合っていますね）
+        Route::get('/{qualification}/view', [QualificationController::class, 'viewPdf'])->name('view-pdf');
+    });
+
 });
 require __DIR__.'/settings.php';

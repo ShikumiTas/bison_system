@@ -26,6 +26,12 @@ class CheckAction
             return $this->errorResponse("サーバー上にファイルが保存されていません。再送してください。");
         }
 
+        // ★ PDF（資格情報）の場合は、CSV解析をスキップしてファイルチェックのみ行う
+        if ($type === 'qualification') {
+            return $this->checkPdfFile($fullPath);
+        }
+
+        // --- 以下、従来のCSV解析ロジック ---
         $content = File::get($fullPath);
         $encoding = mb_detect_encoding($content, ['SJIS-win', 'UTF-8', 'SJIS', 'ASCII']);
         if ($encoding !== 'UTF-8') {
@@ -95,6 +101,33 @@ class CheckAction
             'total_count' => $totalCount,
             'error_count' => count($errors),
             'details'     => $errors
+        ];
+    }
+
+    /**
+     * ★ PDFファイルの整合性を最小限チェックする
+     */
+    private function checkPdfFile(string $fullPath): array
+    {
+        // 1. 念のためファイルサイズが0でないか確認
+        if (File::size($fullPath) === 0) {
+            return $this->errorResponse("PDFファイルが空です。");
+        }
+
+        // 2. ファイルのヘッダー（マジックバイト）がPDF形式（%PDF）になっているか確認
+        $handle = fopen($fullPath, 'rb');
+        $header = fread($handle, 4);
+        fclose($handle);
+
+        if ($header !== '%PDF') {
+            return $this->errorResponse("ファイル形式が不正です。有効なPDFファイルをアップロードしてください。");
+        }
+
+        // チェックを通過した場合は、処理対象のPDFが「1件」あるものとして返す
+        return [
+            'total_count' => 1,
+            'error_count' => 0,
+            'details'     => []
         ];
     }
 

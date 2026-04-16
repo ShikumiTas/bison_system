@@ -31,9 +31,29 @@ class ProjectController extends Controller
         // UseCase内でリレーションがロードされた $project を取得
         list($project, $relatedBizs) = $case($id);
 
+        $defaultPrefCd = null;
+        $prefectures = config('prefs') ?: []; // nullなら空配列にする
+
+        // 1. 現場住所コード(city_cd)があれば、その先頭2桁
+        if ($project->city_cd) {
+            $defaultPrefCd = substr($project->city_cd, 0, 2);
+        } 
+        // 2. なければ「機関所在地」からコードを特定
+        elseif ($project->organization_address && !empty($prefectures)) {
+            // 住所文字列（群馬県など）からコード（10など）を逆引き
+            // array_search は見つからない場合に false を返すので注意
+            $foundCd = array_search($project->organization_address, $prefectures);
+            $defaultPrefCd = $foundCd !== false ? $foundCd : null;
+        }
+
         return Inertia::render('Project/form', [
-            'project'     => $project,
-            'relatedBizs' => $relatedBizs, // Eloquentが取得した紐付け企業リスト
+            'project' => array_merge($project->toArray(), [
+                // フロントに渡す際、city_cdが無くても都道府県コードが分かれば入れておく
+                // 5桁に満たない2桁（'09'など）が渡されても、Vue側は substring(0,2) で処理できる
+                'city_cd' => $project->city_cd ?: $defaultPrefCd 
+            ]),
+            'relatedBizs' => $relatedBizs,
+            'prefectures' => $prefectures, // フロントにも渡す
         ]);
     }
     
@@ -44,6 +64,7 @@ class ProjectController extends Controller
             'status'          => 'required|integer|between:0,5',
             'expected_amount' => 'nullable|numeric',
             'status_memo'     => 'nullable|string',
+            'is_target'       => 'nullable|integer', // ここを追加
         ]);
 
         // UseCaseの実行

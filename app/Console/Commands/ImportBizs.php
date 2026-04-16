@@ -73,7 +73,7 @@ class ImportBizs extends Command
                         'zip_code'           => $row[0] ?? null,
                         'address'            => $row[1] ?? null,
                         'phone_number'       => $row[6] ?? null,
-                        'city_code'          => $row[7] ?? null,
+                        'city_cd'            => $row[7] ?? null,
                         'capital'            => $this->toNumeric($row[8] ?? 0) * 1000,
                         'sales_ratio'        => (float)($row[9] ?? 0),
                         'admin_section'      => $row[10] ?? null,

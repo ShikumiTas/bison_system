@@ -14,12 +14,14 @@ use Illuminate\Support\Facades\DB;
 class ImportProjects extends Command
 {
     protected $signature = 'import:projects {path}';
-    protected $description = '業者番号無視・AIエラーでも判定だけは通す緊急版';
+    protected $description = 'CSVから案件をインポートします（業者番号を無視してマッチング）';
 
     private function getIndustryAliases(string $myIndustry): array
     {
+        // ノイズ除去
         $myIndustry = preg_replace('/[0-9]+位/', '', $myIndustry);
         $myIndustry = trim($myIndustry);
+
         $map = [
             '内装仕上' => ['内装', '建築工事', '模様替', '改修', '仕上げ', '家具'],
             '建築工事' => ['建築', '模様替', '改修', '修繕'],
@@ -29,6 +31,7 @@ class ImportProjects extends Command
             '衛生'   => ['水道', '消防', '設備', '配管'],
             'その他' => ['その他', '建築工事', '土木工事', '改修', '修繕'],
         ];
+
         if (isset($map[$myIndustry])) return $map[$myIndustry];
         foreach ($map as $key => $aliases) {
             if (mb_strpos($myIndustry, $key) !== false) return $aliases;
@@ -46,26 +49,23 @@ class ImportProjects extends Command
 
         $qualifications = Qualification::all();
         $myValidTo = $qualifications->max('valid_to')?->format('Y-m-d');
-        $manualActionedProjects = Project::pluck('is_target', 'project_external_id')->toArray();
+        
+        $manualActionedProjects = Project::where('is_target', '>=', 10)
+            ->pluck('is_target', 'project_external_id')->toArray();
 
         $content = mb_convert_encoding(file_get_contents($path), 'UTF-8', 'SJIS-win, CP932, UTF-8');
         $file = fopen('php://temp', 'r+');
         fwrite($file, $content);
         rewind($file);
-        fgetcsv($file);
+        fgetcsv($file); // ヘッダー
 
         $data = [];
-        $count = 0;
-
         while (($row = fgetcsv($file)) !== FALSE) {
             $externalId = $row[1] ?? null;
             if (!$externalId) continue;
 
             $cityCode = $cityResolver->resolve($row[7] ?? '');
-            
-            // 手動フラグ（10以上）がある場合はそれを維持、なければ自動判定
-            $currentIsTarget = $manualActionedProjects[$externalId] ?? 0;
-            $finalIsTarget = ($currentIsTarget >= 10) ? $currentIsTarget : 0;
+            $finalIsTarget = $manualActionedProjects[$externalId] ?? 0;
 
             if ($finalIsTarget < 10 && $myValidTo) {
                 $csvQuals = $row[12] ?? '';
@@ -73,7 +73,9 @@ class ImportProjects extends Command
                 $isCertMatched = false;
 
                 foreach ($qualifications as $q) {
+                    // 【修正】業者番号は無視！機関名が含まれているかだけ見る
                     $cleanAuth = str_replace(['独立行政法人', '国立大学法人'], '', $q->authority_name);
+                    
                     if (mb_strpos($csvQuals, $cleanAuth) !== false) {
                         $items = is_array($q->business_items) ? $q->business_items : json_decode($q->business_items ?? '[]', true);
                         if ($items) {
@@ -81,6 +83,7 @@ class ImportProjects extends Command
                                 $aliases = $this->getIndustryAliases($item['name'] ?? '');
                                 foreach ($aliases as $alias) {
                                     if (mb_strpos($csvIndustry, $alias) !== false || mb_strpos($alias, $csvIndustry) !== false) {
+                                        // 業種が掠ったら、ランクは「不明」か「不一致」でも一旦マッチとする（緩める）
                                         $isCertMatched = true;
                                         break 2;
                                     }
@@ -118,24 +121,15 @@ class ImportProjects extends Command
                 'created_at'             => now(),
             ];
 
-            if (count($data) >= 500) {
+            if (count($data) >= 1000) {
                 $this->performUpsert($data);
                 $data = [];
             }
-            $count++;
         }
 
         if (!empty($data)) $this->performUpsert($data);
         fclose($file);
-
-        // --- AI補完フェーズを try-catch で囲み、エラーでも無視して終わるように修正 ---
-        try {
-            $this->resolveMissingCityCodes($aiService);
-        } catch (\Exception $e) {
-            Log::warning("AI APIの負荷が高いため、補完フェーズをスキップしました: " . $e->getMessage());
-        }
-
-        $this->info("インポート完了: {$count} 件");
+        $this->info("インポート完了");
     }
 
     private function performUpsert(array $data) {
@@ -145,17 +139,6 @@ class ImportProjects extends Command
             'bidding_qualifications', 'industry', 'description', 'notes', 
             'winner_name', 'winner_address', 'is_target', 'updated_at'
         ]);
-    }
-
-    private function resolveMissingCityCodes($aiService) {
-        $nullProjects = Project::whereNull('city_cd')->whereNotNull('delivery_location')->whereRaw('CHAR_LENGTH(delivery_location) > 3')->limit(20)->get();
-        foreach ($nullProjects as $project) {
-            $suggestion = $aiService->guessLocation($project->title, $project->organization, $project->delivery_location);
-            if ($suggestion) {
-                DB::table('location_aliases')->updateOrInsert(['alias_name' => $suggestion['alias_name']], ['city_cd' => $suggestion['city_cd'], 'updated_at' => now()]);
-                $project->update(['city_cd' => $suggestion['city_cd']]);
-            }
-        }
     }
 
     private function formatDate($dateStr) {

@@ -16,7 +16,7 @@ return new class extends Migration {
             // 発注者情報
             $table->string('organization')->nullable()->comment('機関名');
             $table->string('organization_address')->nullable()->comment('機関所在地');
-            $table->string('delivery_location')->nullable()->comment('履行/納品場所');
+            $table->text('delivery_location')->nullable()->comment('履行/納品場所');
             
             // スケジュール
             $table->date('notice_date')->nullable()->comment('案件公示日');
@@ -44,6 +44,9 @@ return new class extends Migration {
             // 企業(bizs)との紐付け用
             $table->string('biz_permit_id')->nullable()->index()
                   ->comment('bizs.permit_idとの紐付け用');
+
+            $table->string('city_cd', 5)->nullable()->comment('市区町村コード(5桁)');
+            $table->tinyInteger('is_target')->default(0)->comment('0:自動外, 1:自動対象, 10:手動確定, 20:手動解除');
 
             $table->timestamps();
         });

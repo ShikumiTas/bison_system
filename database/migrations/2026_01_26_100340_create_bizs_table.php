@@ -25,7 +25,7 @@ return new class extends Migration
             $table->string('zip_code', 8)->nullable()->comment('郵便番号');
             $table->string('address')->nullable()->comment('所在地');
             $table->string('phone_number')->nullable()->comment('電話番号');
-            $table->string('city_code')->nullable()->comment('市区町村コード');
+            $table->string('city_cd', 5)->nullable()->comment('市区町村コード');
             
             // 財務・審査情報
             $table->bigInteger('capital')->nullable()->comment('資本金（円）');

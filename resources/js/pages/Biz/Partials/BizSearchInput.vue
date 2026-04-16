@@ -16,7 +16,9 @@ import {
 const props = defineProps({
     projectId: { type: Number, required: true },
     relatedBizs: { type: Array, default: () => [] },
-    projectAddress: { type: String, default: '' }
+    projectAddress: { type: String, default: '' },
+    projectCityCd: { type: String, default: '' }, // 5桁コード
+    prefectures: { type: Object, default: () => ({}) } // config('Prefs') の内容
 });
 
 const isAlreadyAdded = (bizId: number) => {
@@ -34,7 +36,9 @@ const searchForm = ref({
     minScore: '',
     minSales: '',
     maxSales: '',
-    location: ''
+    location: '',
+    prefCd: '',   // 2桁
+    onlyLocal: false
 });
 
 // 業種が選択されているかどうかの判定
@@ -97,6 +101,9 @@ const fetchResults = async () => {
         const params: any = {
             keyword: cleanKeyword,
             location: cleanLocation || null,
+            pref_cd: searchForm.value.prefCd || null,
+            only_local: searchForm.value.onlyLocal,
+            project_city_cd: props.projectCityCd, // 5桁を渡す
         };
 
         params.category = isCategorySelected.value ? category : null;
@@ -133,13 +140,39 @@ const addBiz = (biz: any) => {
 };
 
 onMounted(() => {
-    if (props.projectAddress) {
-        const match = props.projectAddress.match(/^.{2,3}[都道府県]/);
-        if (match) {
-            searchForm.value.location = match[0];
+    if (props.projectCityCd) {
+        // projectCityCd が '09213'（5桁）でも '09'（2桁）でも、最初の2桁で判定
+        const prefCode = props.projectCityCd.substring(0, 2);
+        const prefName = props.prefectures[prefCode];
+        
+        if (prefName) {
+            // ここで「愛知県」や「栃木県」が検索窓に自動セットされる
+            searchForm.value.location = prefName;
         }
     }
 });
+
+// onMounted(() => {
+//     // 1. 案件の city_cd (5桁) から先頭2桁を抽出
+//     if (props.projectCityCd) {
+//         const prefCode = props.projectCityCd.substring(0, 2);
+        
+//         // 2. config('Prefs') から県名を取得して location にセット
+//         // props.prefectures が { "09": "栃木県", ... } の想定
+//         const prefName = props.prefectures[prefCode];
+        
+//         if (prefName) {
+//             searchForm.value.location = prefName;
+//         }
+//     }
+
+//     if (props.projectAddress) {
+//         const match = props.projectAddress.match(/^.{2,3}[都道府県]/);
+//         if (match) {
+//             searchForm.value.location = match[0];
+//         }
+//     }
+// });
 
 const categories = [
     '土木一式', '建築一式', '大工', '左官', 'とび・土工', 
@@ -169,10 +202,10 @@ const categories = [
                     <div class="relative flex-1">
                         <Search class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                         <Input v-model="searchForm.keyword" 
-                               placeholder="企業名..." 
-                               class="pl-9 h-11 border-none shadow-none focus-visible:ring-1 bg-muted/50 text-base sm:text-sm" 
-                               @keyup.enter="fetchResults"
-                               auto-focus />
+                            placeholder="企業名・許可番号..." 
+                            class="pl-9 h-11 border-none shadow-none focus-visible:ring-1 bg-muted/50 text-base sm:text-sm" 
+                            @keyup.enter="fetchResults"
+                            auto-focus />
                     </div>
                     <Button @click="isAdvanced = !isAdvanced" variant="ghost" size="sm" :class="isAdvanced ? 'text-primary bg-primary/10' : 'text-muted-foreground'">
                         <Filter class="w-4 h-4 mr-1" />
@@ -180,14 +213,34 @@ const categories = [
                     </Button>
                 </div>
 
-                <div class="relative group">
-                    <MapPin class="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground group-focus-within:text-primary transition-colors" />
-                    <Input v-model="searchForm.location" 
-                           placeholder="場所（例：愛知県）" 
-                           class="pl-9 h-9 text-xs bg-muted/30 border-dashed border-muted-foreground/30 focus-visible:ring-1" />
+                <div class="flex items-center gap-2">
+                    <div class="relative flex-1 group">
+                        <MapPin class="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground group-focus-within:text-primary transition-colors" />
+                        <Input v-model="searchForm.location" 
+                            placeholder="場所（例：愛知県）" 
+                            class="pl-9 h-9 text-xs bg-muted/30 border-dashed border-muted-foreground/30 focus-visible:ring-1" />
+                    </div>
+
+                    <Button 
+                        type="button"
+                        variant="outline" 
+                        size="sm"
+                        @click="searchForm.onlyLocal = !searchForm.onlyLocal"
+                        :class="[
+                            'h-9 px-3 gap-1.5 transition-all border-dashed shrink-0', 
+                            searchForm.onlyLocal 
+                                ? 'bg-orange-50 border-orange-400 text-orange-700 shadow-sm' 
+                                : 'text-muted-foreground bg-transparent'
+                        ]"
+                    >
+                        <span class="text-[10px] font-black italic uppercase tracking-tighter">地元企業指定</span>
+                        <div :class="[
+                            'w-1.5 h-1.5 rounded-full transition-colors', 
+                            searchForm.onlyLocal ? 'bg-orange-500 animate-pulse' : 'bg-muted-foreground/30'
+                        ]"></div>
+                    </Button>
                 </div>
             </div>
-
             <div v-if="hasActiveFilters" class="flex flex-wrap gap-1.5 mt-3 mb-1 animate-in slide-in-from-top-1">
                 <div v-if="isCategorySelected" class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 text-[10px] font-bold border border-blue-200">
                     {{ searchForm.category }}

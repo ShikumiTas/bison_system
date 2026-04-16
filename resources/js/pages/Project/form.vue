@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, nextTick } from 'vue';
+import { ref, onMounted, computed, nextTick } from 'vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import BizSearchInput from '@/pages/Biz/Partials/BizSearchInput.vue';
 import { Head, Link, router, useForm } from "@inertiajs/vue3";
@@ -7,7 +7,7 @@ import {
     Building2, MoreVertical, Clock, ExternalLink, 
     Calendar, MapPin, Truck, Globe, ShieldCheck, 
     CheckCircle2, StickyNote, Phone, Edit3, Save, X, JapaneseYen,
-    UserCircle
+    UserCircle,Trash2, CheckCircle, ArchiveX, Circle,
 } from 'lucide-vue-next';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -22,6 +22,7 @@ import {
 const props = defineProps({
     project: Object,
     relatedBizs: Array,
+    prefectures: Object, // ← これが必要！
 });
 
 const isEditing = ref(false);
@@ -30,6 +31,8 @@ const form = useForm({
     expected_amount: props.project.expected_amount || '',
     status: props.project.status ?? 0,
     status_memo: props.project.status_memo || '',
+    is_target: props.project.is_target, // 追加
+
 });
 
 const saveProject = () => {
@@ -39,6 +42,50 @@ const saveProject = () => {
             isEditing.value = false;
         },
     });
+};
+
+// 2. 手動ステータスを更新する関数を追加
+// メッセージとボタン名を動的に取得するための算出プロパティ
+// ボタンの表示内容を統合管理
+const targetStatusContent = computed(() => {
+    if (form.is_target === 10) {
+        return {
+            label: '手動確定（保存でロック）',
+            class: 'border-blue-500 text-blue-600 bg-blue-50',
+            icon: CheckCircle
+        };
+    } else if (form.is_target === 20) {
+        return {
+            label: '対象外（保存で除外）',
+            class: 'border-destructive text-destructive bg-destructive/5',
+            icon: ArchiveX
+        };
+    }
+    return {
+        label: '案件の状態を選択（現在は検討中）',
+        class: 'border-primary text-primary',
+        icon: Circle
+    };
+});
+
+// 状態を 1 -> 10 -> 20 -> 1 の順で切り替える
+const toggleTargetStatus = () => {
+    let nextStatus: number;
+    let message: string;
+
+    if (form.is_target === 10) {
+        nextStatus = 20;
+        message = 'この案件を対象外として除外しますか？\n（今後の自動インポートでも対象外となります）';
+    } else if (form.is_target === 20) {
+        nextStatus = 1;
+        message = 'ステータスを未設定（検討中）に戻しますか？';
+    } else {
+        nextStatus = 10;
+        message = 'この案件を「手動確定」として登録しますか？';
+    }
+
+    if (!confirm(message)) return;
+    form.is_target = nextStatus;
 };
 
 const getProjectStatus = (project: any) => {
@@ -172,9 +219,32 @@ const breadcrumbs = [
                                 <StickyNote class="absolute right-2 top-2 w-3 h-3 text-muted-foreground opacity-30 group-focus-within/memo:opacity-0" />
                             </div>
                         </div>
-                        <Button @click="saveProject" size="sm" class="w-full h-8 font-bold text-[11px]" :disabled="form.processing">
-                            <Save class="w-3.5 h-3.5 mr-1" /> 更新内容を保存
-                        </Button>
+
+                        <div class="space-y-2 mt-4">
+                            <label class="text-[10px] font-bold uppercase text-primary block">案件の扱い</label>
+                            
+                            <Button 
+                                type="button"
+                                @click="toggleTargetStatus" 
+                                variant="outline" 
+                                size="sm" 
+                                class="w-full h-8 font-bold text-[11px] transition-all duration-200"
+                                :class="targetStatusContent.class"
+                            >
+                                <component :is="targetStatusContent.icon" class="w-3.5 h-3.5 mr-1" />
+                                {{ targetStatusContent.label }}
+                            </Button>
+
+                            <Button 
+                                @click="saveProject" 
+                                size="sm" 
+                                class="w-full h-9 font-black text-[11px] mt-4 shadow-md bg-primary text-primary-foreground hover:bg-primary/90" 
+                                :disabled="form.processing"
+                            >
+                                <Save class="w-3.5 h-3.5 mr-1" /> 更新内容を保存
+                            </Button>
+                        </div>
+
                     </div>
 
                     <template v-else>
@@ -240,7 +310,13 @@ const breadcrumbs = [
                         <h2 class="text-lg font-black flex items-center gap-2 text-foreground">
                             <CheckCircle2 class="w-5 h-5 text-primary" /> 検討・参画中の企業
                         </h2>
-                        <BizSearchInput :projectId="project.id" :relatedBizs="relatedBizs" :projectAddress="project.organization_address" />
+                        <BizSearchInput 
+                            :projectId="project.id" 
+                            :relatedBizs="relatedBizs" 
+                            :projectAddress="project.organization_address"
+                            :projectCityCd="project.city_cd" 
+                            :prefectures="prefectures" 
+                        />                        
                     </div>
 
                     <div class="grid gap-4">

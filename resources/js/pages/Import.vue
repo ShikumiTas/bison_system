@@ -12,7 +12,8 @@ import {
     Loader2,
     Database,
     FileSpreadsheet,
-    ShieldCheck
+    ShieldCheck,
+    FileText // ★PDF用にアイコンを追加
 } from 'lucide-vue-next';
 
 const props = defineProps<{
@@ -33,7 +34,7 @@ const props = defineProps<{
 }>();
 
 const form = useForm({
-    csv_file: null,
+    file: null, // ★ csv_file から file に名前を抽象化
     type: 'project' 
 });
 
@@ -60,12 +61,12 @@ const executeImport = () => {
 };
 
 const breadcrumbs: BreadcrumbItem[] = [
-    { title: '外部データ取り込み', href: '/import' },
+    { title: 'データ取り込み', href: '/import' },
 ];
 </script>
 
 <template>
-    <Head title="外部データ取り込み" />
+    <Head title="データ取り込み" />
 
     <AppLayout :breadcrumbs="breadcrumbs">
         <div class="min-h-screen bg-zinc-50/50 dark:bg-zinc-950/50 p-4 md:p-8">
@@ -76,7 +77,7 @@ const breadcrumbs: BreadcrumbItem[] = [
                         <Database class="w-6 h-6 text-indigo-600" />
                         データインポート
                     </h1>
-                    <p class="text-sm text-muted-foreground">CSVファイルをアップロードして、一括登録または更新を行います。</p>
+                    <p class="text-sm text-muted-foreground">ファイルをアップロードして、一括登録または更新を行います。</p>
                 </div>
 
                 <div class="bg-card border border-border rounded-2xl shadow-sm overflow-hidden">
@@ -90,32 +91,36 @@ const breadcrumbs: BreadcrumbItem[] = [
                                     v-model="form.type" 
                                     class="w-full h-11 text-sm border-zinc-200 dark:border-zinc-800 bg-background rounded-xl px-4 font-bold focus:ring-2 ring-indigo-500/20 outline-none transition-all cursor-pointer"
                                 >
-                                    <option value="project">案件データ (NJSS形式)</option>
-                                    <option value="biz">企業データ (経審形式)</option>
+                                    <option value="project">案件データ (NJSS形式 CSV)</option>
+                                    <option value="biz">企業データ (経審形式 CSV)</option>
+                                    <option value="qualification">自社資格情報 (PDF形式)</option>
                                 </select>
                             </div>
 
                             <div class="grid gap-2">
                                 <label class="text-[10px] font-bold uppercase tracking-widest text-zinc-500 flex items-center gap-2">
-                                    <FileSpreadsheet class="w-3.5 h-3.5" /> CSVファイル
+                                    <FileText v-if="form.type === 'qualification'" class="w-3.5 h-3.5" />
+                                    <FileSpreadsheet v-else class="w-3.5 h-3.5" /> 
+                                    {{ form.type === 'qualification' ? 'PDFファイル' : 'CSVファイル' }}
                                 </label>
                                 <div class="relative group">
                                     <input 
                                         type="file" 
-                                        @input="(e: any) => form.csv_file = e.target.files[0]" 
+                                        :accept="form.type === 'qualification' ? 'application/pdf' : '.csv'"
+                                        @input="(e: any) => form.file = e.target.files[0]" 
                                         class="block w-full text-[11px] text-muted-foreground file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-[11px] file:font-black file:bg-zinc-100 dark:file:bg-zinc-800 file:text-zinc-600 dark:file:text-zinc-400 hover:file:bg-indigo-50 border border-zinc-200 dark:border-zinc-800 p-1 rounded-xl h-11 flex items-center"
                                     />
                                 </div>
                             </div>
                         </div>
 
-                        <div v-if="form.errors.csv_file" class="p-3 bg-destructive/5 rounded-lg border border-destructive/10 text-[11px] text-destructive font-bold flex items-center gap-2 animate-in fade-in">
-                            <AlertCircle class="w-4 h-4" /> {{ form.errors.csv_file }}
+                        <div v-if="form.errors.file" class="p-3 bg-destructive/5 rounded-lg border border-destructive/10 text-[11px] text-destructive font-bold flex items-center gap-2 animate-in fade-in">
+                            <AlertCircle class="w-4 h-4" /> {{ form.errors.file }}
                         </div>
 
                         <button 
                             @click="submit" 
-                            :disabled="form.processing || !form.csv_file" 
+                            :disabled="form.processing || !form.file" 
                             class="w-full h-12 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 font-black rounded-xl hover:opacity-90 active:scale-[0.98] transition-all disabled:opacity-30 text-sm flex items-center justify-center gap-2 shadow-xl shadow-zinc-200/50 dark:shadow-none"
                         >
                             <Loader2 v-if="form.processing" class="w-5 h-5 animate-spin" />
@@ -184,7 +189,7 @@ const breadcrumbs: BreadcrumbItem[] = [
                     <div class="p-6 bg-background rounded-full shadow-inner mb-6">
                         <UploadCloud class="w-12 h-12 opacity-10" />
                     </div>
-                    <h3 class="text-lg font-bold text-foreground mb-2">CSVファイルを待機中</h3>
+                    <h3 class="text-lg font-bold text-foreground mb-2">ファイルを待機中</h3>
                     <p class="text-sm text-zinc-500 text-center max-w-sm px-6">
                         適切なデータ種別を選択し、ファイルをアップロードしてください。<br>インポート前に整合性の自動チェックが走ります。
                     </p>
