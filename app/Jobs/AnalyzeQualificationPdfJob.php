@@ -1,8 +1,12 @@
 <?php
 
-namespace App\Jobs; // ← ここを Commands から Jobs に修正
+namespace App\Jobs;
 
-use Illuminate\Console\Command;
+use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldQueue;
+use Illuminate\Foundation\Bus\Dispatchable;
+use Illuminate\Queue\InteractsWithQueue;
+use Illuminate\Queue\SerializesModels;
 use App\Models\Project;
 use App\Models\Qualification;
 use App\Services\CityResolverService;
@@ -11,14 +15,25 @@ use Illuminate\Support\Facades\Log;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 
-class ImportProjects extends Command
+class AnalyzeQualificationPdfJob implements ShouldQueue
 {
-    protected $signature = 'import:projects {path}';
-    protected $description = 'CSVから案件をインポートします（業者番号を無視してマッチング）';
+    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
+    protected $path;
+
+    /**
+     * Create a new job instance.
+     */
+    public function __construct(string $path)
+    {
+        $this->path = $path;
+    }
+
+    /**
+     * 業種エイリアスの判定ロジック
+     */
     private function getIndustryAliases(string $myIndustry): array
     {
-        // ノイズ除去
         $myIndustry = preg_replace('/[0-9]+位/', '', $myIndustry);
         $myIndustry = trim($myIndustry);
 
@@ -39,10 +54,16 @@ class ImportProjects extends Command
         return [$myIndustry];
     }
 
+    /**
+     * メイン処理
+     */
     public function handle(CityResolverService $cityResolver, AiGeocodingService $aiService)
     {
-        $path = $this->argument('path');
-        if (!file_exists($path)) return;
+        $path = $this->path;
+        if (!file_exists($path)) {
+            Log::error("Import file not found: {$path}");
+            return;
+        }
 
         set_time_limit(0);
         ini_set('memory_limit', '1G');
@@ -53,11 +74,12 @@ class ImportProjects extends Command
         $manualActionedProjects = Project::where('is_target', '>=', 10)
             ->pluck('is_target', 'project_external_id')->toArray();
 
+        // CSV読み込み（SJIS対策）
         $content = mb_convert_encoding(file_get_contents($path), 'UTF-8', 'SJIS-win, CP932, UTF-8');
         $file = fopen('php://temp', 'r+');
         fwrite($file, $content);
         rewind($file);
-        fgetcsv($file); // ヘッダー
+        fgetcsv($file); // ヘッダーをスキップ
 
         $data = [];
         while (($row = fgetcsv($file)) !== FALSE) {
@@ -73,7 +95,6 @@ class ImportProjects extends Command
                 $isCertMatched = false;
 
                 foreach ($qualifications as $q) {
-                    // 【修正】業者番号は無視！機関名が含まれているかだけ見る
                     $cleanAuth = str_replace(['独立行政法人', '国立大学法人'], '', $q->authority_name);
                     
                     if (mb_strpos($csvQuals, $cleanAuth) !== false) {
@@ -83,7 +104,6 @@ class ImportProjects extends Command
                                 $aliases = $this->getIndustryAliases($item['name'] ?? '');
                                 foreach ($aliases as $alias) {
                                     if (mb_strpos($csvIndustry, $alias) !== false || mb_strpos($alias, $csvIndustry) !== false) {
-                                        // 業種が掠ったら、ランクは「不明」か「不一致」でも一旦マッチとする（緩める）
                                         $isCertMatched = true;
                                         break 2;
                                     }
@@ -112,16 +132,16 @@ class ImportProjects extends Command
                 'bid_date'               => $this->formatDate($row[9] ?? null),
                 'bidding_qualifications' => $row[12] ?? null,
                 'industry'               => $row[13] ?? null,
-                'description'            => $row[15] ?? null,
-                'notes'                  => $row[21] ?? null,
-                'winner_name'            => (str_contains($row[19] ?? '', '有料プラン')) ? null : ($row[19] ?? null),
+                'description'            => $row[14] ?? null, // 元のCSVカラムに合わせて調整
+                'notes'                  => $row[15] ?? null,
+                'winner_name'            => (isset($row[19]) && str_contains($row[19], '有料プラン')) ? null : ($row[19] ?? null),
                 'winner_address'         => $row[20] ?? null,
                 'is_target'              => $finalIsTarget,
                 'updated_at'             => now(),
                 'created_at'             => now(),
             ];
 
-            if (count($data) >= 1000) {
+            if (count($data) >= 500) {
                 $this->performUpsert($data);
                 $data = [];
             }
@@ -129,7 +149,8 @@ class ImportProjects extends Command
 
         if (!empty($data)) $this->performUpsert($data);
         fclose($file);
-        $this->info("インポート完了");
+        
+        Log::info("Import completed successfully for: {$path}");
     }
 
     private function performUpsert(array $data) {
