@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Console\Commands;
+namespace App\Jobs; // ← ここを Commands から Jobs に修正
 
 use Illuminate\Console\Command;
 use App\Models\Project;
