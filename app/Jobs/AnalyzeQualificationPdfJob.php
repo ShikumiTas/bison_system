@@ -53,7 +53,8 @@ class AnalyzeQualificationPdfJob implements ShouldQueue
         
         // Gemini API呼び出し
         $response = Http::withHeaders(['Content-Type' => 'application/json'])
-            ->post("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={$apiKey}", [
+            // 修正後：2.5-flash を指定
+            ->post("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={$apiKey}", [
                 'contents' => [
                     [
                         'parts' => [
